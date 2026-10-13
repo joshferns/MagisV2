@@ -31,6 +31,7 @@
 #include "drivers/gpio.h"
 #include "drivers/light_led.h"
 #include "drivers/accgyro.h"
+#include "drivers/system.h"
 
 #include "sensors/sensors.h"
 #include "sensors/acceleration.h"
@@ -108,6 +109,18 @@ void configurePosHold(pidProfile_t *initialPidProfile, rcControlsConfig_t *rcCon
     rcControlsConfig = rcControlsConfigPointer;
 }
 
+// Position ( and its error ) lives in the arm-heading frame; velocity and the pitch/roll
+// outputs live in the current heading frame. Without optic flow both are the same frame.
+static void positionErrorToBody(float errorX, float errorY, float *bodyX, float *bodyY)
+{
+#ifdef OPTIC_FLOW
+    opticFlowEarthToBody(errorX, errorY, bodyX, bodyY);
+#else
+    *bodyX = errorX;
+    *bodyY = errorY;
+#endif
+}
+
 #ifdef OPTIC_FLOW
 void selectVelOrPosmode(void)
 {
@@ -137,12 +150,6 @@ void selectVelOrPosmode(void)
 
         }
 
-        if (!isPositionXChanged) {
-
-            positionXError = constrain(desiredPositionX - PositionX, -200, 200);
-            setVelocityX = (int32_t)((float) positionXError * ((float) pidProfile->P8[PIDPOS] / (float) 100));
-            setVelocityX = constrain(setVelocityX, -100, 100);
-        }
 
     }
 
@@ -170,14 +177,29 @@ void selectVelOrPosmode(void)
 
         }
 
+    }
+
+    // Position-hold axes: error in the arm-heading frame -> desired velocity -> heading frame
+    if (!isPositionXChanged || !isPositionYChanged) {
+        float posVelX = 0, posVelY = 0;    // cm/s, arm-heading frame
+        float bodyVelX, bodyVelY;          // cm/s, heading frame
+
+        if (!isPositionXChanged) {
+            positionXError = (int16_t) constrain((int32_t) lrintf((float) desiredPositionX - PositionX), -200, 200);
+            posVelX = (float) positionXError * ((float) pidProfile->P8[PIDPOS] / 100.0f);
+        }
         if (!isPositionYChanged) {
+            positionYError = (int16_t) constrain((int32_t) lrintf((float) desiredPositionY - PositionY), -200, 200);
+            posVelY = (float) positionYError * ((float) pidProfile->P8[PIDPOS] / 100.0f);
+        }
 
-            positionYError = constrain(desiredPositionY - PositionY, -200, 200);
+        positionErrorToBody(posVelX, posVelY, &bodyVelX, &bodyVelY);
 
-            setVelocityY = (int32_t)((float) positionYError * ((float) pidProfile->P8[PIDPOS] / (float) 100));
-
-            setVelocityY = constrain(setVelocityY, -100, 100);
-
+        if (!isPositionXChanged) {
+            setVelocityX = constrain((int32_t) lrintf(bodyVelX), -100, 100);
+        }
+        if (!isPositionYChanged) {
+            setVelocityY = constrain((int32_t) lrintf(bodyVelY), -100, 100);
         }
 
     }
@@ -205,11 +227,16 @@ void VelocityController(int16_t VdesiredX, int16_t VdesiredY)
     PoutX = constrain(PoutX, -200, 200);
     PoutY = constrain(PoutY, -200, 200);
 
+    // The integral is scaled by elapsed time, normalised to the 3500 us loop it was tuned at,
+    // so the I gain no longer depends on the loop rate or on how often this is called.
+    static uint32_t lastIntegralUs = 0;
+    uint32_t nowUs = micros();
+    float integralScale = constrainf((float) (nowUs - lastIntegralUs) / 3500.0f, 0.0f, 4.0f);
+    lastIntegralUs = nowUs;
+
     if (ki_velx && ARMING_FLAG(ARMED) && isLocalisationOn) {
-        IoutX += (ki_velx * errorVelX) / 100;
-        IoutY += (ki_vely * errorVelY) / 100;
-        IoutX = constrain(IoutX, -20000, 20000);
-        IoutY = constrain(IoutY, -20000, 20000);
+        IoutX = (int16_t) constrain((int32_t) IoutX + (int32_t) lrintf((float) (ki_velx * errorVelX) * integralScale / 100.0f), -20000, 20000);
+        IoutY = (int16_t) constrain((int32_t) IoutY + (int32_t) lrintf((float) (ki_vely * errorVelY) * integralScale / 100.0f), -20000, 20000);
 
     } else { //Take out effects of integral if ki is zero
         IoutX = 0;
@@ -264,8 +291,11 @@ void PosVelController(int16_t desiredX, int16_t desiredY, int16_t desiredVel)
 
     int16_t errorX, errorY;
 
-    errorX = desiredX - PositionX;
-    errorY = desiredY - PositionY;
+    float bodyErrorX, bodyErrorY;    // cm, heading frame
+
+    positionErrorToBody((float) desiredX - PositionX, (float) desiredY - PositionY, &bodyErrorX, &bodyErrorY);
+    errorX = (int16_t) constrainf(bodyErrorX, -30000.0f, 30000.0f);
+    errorY = (int16_t) constrainf(bodyErrorY, -30000.0f, 30000.0f);
 
     VdesiredX = constrain((kp_posx * errorX) / 100, -desiredVel, desiredVel);
     VdesiredY = constrain((kp_posy * errorY) / 100, -desiredVel, desiredVel);
@@ -343,8 +373,11 @@ bool SimpleController(int16_t desiredX, int16_t desiredY, int16_t desiredZ)
     _new_kix = _new_kiy = pidProfile->I8[PIDPOSR];
     _new_kdx = _new_kdy = pidProfile->D8[PIDPOSR];
 
-    errorX = constrain(desiredX - PositionX, -50, 50);
-    errorY = constrain(desiredY - PositionY, -50, 50);
+    float bodyErrorX, bodyErrorY;    // cm, heading frame
+
+    positionErrorToBody((float) desiredX - PositionX, (float) desiredY - PositionY, &bodyErrorX, &bodyErrorY);
+    errorX = (int16_t) constrainf(bodyErrorX, -50.0f, 50.0f);
+    errorY = (int16_t) constrainf(bodyErrorY, -50.0f, 50.0f);
     //errorX = desiredX-PositionX;
     //errorY = desiredY-PositionY;
 

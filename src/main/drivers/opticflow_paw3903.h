@@ -37,6 +37,10 @@ extern float bodyRate2[2];
 void initOpticFlow();
 void updateOpticFlow();
 void updateSpiOpticFlow();
+void opticFlowAccumulateGyro(void);
+
+extern bool opticFlowSampleValid;      // last completed read passed the surface-quality check
+extern uint32_t opticFlowSampleCount;  // increments on every completed read
 
 extern uint8_t opticFlowAddress;
 

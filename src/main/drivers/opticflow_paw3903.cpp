@@ -912,77 +912,116 @@ void updateOpticFlow ( ) {
   gyro_sum_count = 0;
 }
 
+// PAW3903 Motion_Burst frame, as read after the 0x16 address byte.
+#define PAW_BURST_DX_L          2
+#define PAW_BURST_DX_H          3
+#define PAW_BURST_DY_L          4
+#define PAW_BURST_DY_H          5
+#define PAW_BURST_SQUAL         6
+#define PAW_BURST_SHUTTER_UPPER 10
+
+// The sensor accumulates motion counts between reads, so the read period only sets the
+// update rate and latency. 20 ms ( 50 Hz ) replaces the old 40 ms ( 25 Hz ).
+#define OPTICFLOW_READ_INTERVAL_MS 20
+
+// The old code scaled counts by 0.051 assuming exactly one 40 ms read period. Counts are now
+// divided by the measured period, so the same calibration is 0.051 * 0.040 rad per count.
+#define OPTICFLOW_RAD_PER_COUNT    ( 0.051f * 0.040f )
+
+// Low-light / featureless rejection, as recommended for the PMW3901 family: drop the frame
+// only when SQUAL is low AND the shutter is at its upper limit.
+#define OPTICFLOW_SQUAL_MIN        0x19
+#define OPTICFLOW_SHUTTER_DARK     0x1F
+
+// ICM20948 at +-2000 dps: 16.4 LSB per deg/s -> rad/s per LSB.
+#define OPTICFLOW_GYRO_RAD_PER_LSB 0.00106f
+
+static float flowGyroSum [ 2 ];        // rad/s, summed over the current flow read window
+static uint16_t flowGyroCount;
+bool opticFlowSampleValid      = false;
+uint32_t opticFlowSampleCount  = 0;    // increments on every completed read, valid or not
+
+// Called once per main loop after imuUpdate ( ), so the rotation removed from each flow
+// sample is the gyro averaged over the same window the sensor integrated its counts over.
+void opticFlowAccumulateGyro ( void ) {
+  if ( flowGyroCount < 1000 ) {
+    flowGyroSum [ 0 ] += ( float ) gyroADC [ 0 ] * OPTICFLOW_GYRO_RAD_PER_LSB;
+    flowGyroSum [ 1 ] += ( float ) gyroADC [ 1 ] * OPTICFLOW_GYRO_RAD_PER_LSB;
+    flowGyroCount++;
+  }
+}
+
 void updateSpiOpticFlow ( ) {
 
-  if ( opticInterval.set ( 40, true ) ) {
+  if ( ! opticInterval.set ( OPTICFLOW_READ_INTERVAL_MS, true ) ) {
+    return;
+  }
 
 #ifdef SPI_MODE
-    ENABLE_SPI;
+  ENABLE_SPI;
 
-    delayMicroseconds ( 50 );
+  delayMicroseconds ( 50 );
 
-    spiTransferByte ( SPI2, ( 0x16 & ~0x80u ) );
+  spiTransferByte ( SPI2, ( 0x16 & ~0x80u ) );
 
-    delayMicroseconds ( 150 );
+  delayMicroseconds ( 150 );
 
-    spiTransfer ( SPI2, buf, NULL, 12 );
+  spiTransfer ( SPI2, buf, NULL, 12 );
 
-    delayMicroseconds ( 50 );
+  delayMicroseconds ( 50 );
 
-    DISABLE_SPI;
+  DISABLE_SPI;
 
-    delayMicroseconds ( 50 );
+  delayMicroseconds ( 50 );
 
-    flowRate [ 0 ]  = ( int16_t ) ( ( uint16_t ) buf [ 3 ] << 8 ) | buf [ 2 ];
-    flowRate [ 1 ]  = ( int16_t ) ( ( uint16_t ) buf [ 5 ] << 8 ) | buf [ 4 ];
-    bodyRate1 [ 0 ] = ( int16_t ) buf [ 6 ];
-    bodyRate1 [ 1 ] = ( int16_t ) ( ( uint16_t ) buf [ 10 ] << 8 ) | buf [ 11 ];
-
-    bodyRate2 [ 0 ] = ( int16_t ) buf [ 7 ];
-
+  const uint8_t *frame = buf;
 #else
-    ok = spiBridge.spiTransfer ( 0, spiOpticFlowData, sizeof ( spiOpticFlowData ), buf );
+  ok = spiBridge.spiTransfer ( 0, spiOpticFlowData, sizeof ( spiOpticFlowData ), buf );
 
-    if ( ok )
-      bodyRate2 [ 1 ] = 444;
-    else
-      bodyRate2 [ 1 ] = 111;
+  if ( ok )
+    bodyRate2 [ 1 ] = 444;
+  else
+    bodyRate2 [ 1 ] = 111;
 
-    flowRate [ 0 ]  = ( int16_t ) ( ( uint16_t ) buf [ 4 ] << 8 ) | buf [ 3 ];
-    flowRate [ 1 ]  = ( int16_t ) ( ( uint16_t ) buf [ 6 ] << 8 ) | buf [ 5 ];
-    bodyRate1 [ 0 ] = ( int16_t ) buf [ 7 ];
-    bodyRate1 [ 1 ] = ( int16_t ) ( ( uint16_t ) buf [ 11 ] << 8 ) | buf [ 12 ];
-
-    bodyRate2 [ 0 ] = ( int16_t ) buf [ 8 ];
-
+  const uint8_t *frame = buf + 1;    // the bridge returns the address byte first
 #endif
 
-    uint32_t this_frame_us   = micros ( );
-    last_opticflow_update_ms = millis ( );
+  int16_t deltaX = ( int16_t ) ( ( ( uint16_t ) frame [ PAW_BURST_DX_H ] << 8 ) | frame [ PAW_BURST_DX_L ] );
+  int16_t deltaY = ( int16_t ) ( ( ( uint16_t ) frame [ PAW_BURST_DY_H ] << 8 ) | frame [ PAW_BURST_DY_L ] );
 
-    float dt      = ( this_frame_us - last_frame_us );
-    last_frame_us = this_frame_us;
+  surface_quality = frame [ PAW_BURST_SQUAL ];
+  bodyRate1 [ 0 ] = ( float ) frame [ PAW_BURST_SQUAL ];
+  bodyRate1 [ 1 ] = ( float ) frame [ PAW_BURST_SHUTTER_UPPER ];
 
-    flowRate [ 0 ] *= ( 0.051 );
+  uint32_t this_frame_us = micros ( );
+  float readPeriod       = ( float ) ( this_frame_us - last_frame_us ) * 1.0e-6f;    // s
+  last_frame_us          = this_frame_us;
 
-    flowRate [ 1 ] *= ( 0.051 );
+  bool lowLight = ( frame [ PAW_BURST_SQUAL ] < OPTICFLOW_SQUAL_MIN ) && ( frame [ PAW_BURST_SHUTTER_UPPER ] >= OPTICFLOW_SHUTTER_DARK );
 
-    gyro_sum [ 0 ] = gyroADC [ 0 ] * 0.00106;
-    gyro_sum [ 1 ] = gyroADC [ 1 ] * 0.00106;
-
-    /*
-    if (isGyroXYQueueIsFull()) {
-        getFrontGyroXY(&hist_gyroX, &hist_gyroY);
-    } else {
-        hist_gyroX = gyro_sum[0];
-        hist_gyroY = gyro_sum[1];
-     }
-     */
-
-    bodyRate [ 0 ] = hist_gyroX;
-    bodyRate [ 1 ] = hist_gyroY;
-
-    bodyRate [ 0 ] = gyro_sum [ 0 ];
-    bodyRate [ 1 ] = gyro_sum [ 1 ];
+  if ( is_positive ( readPeriod ) && ( readPeriod < CXOF_TIMEOUT_SEC ) && ! lowLight ) {
+    flowRate [ 0 ]       = ( float ) deltaX * OPTICFLOW_RAD_PER_COUNT / readPeriod;
+    flowRate [ 1 ]       = ( float ) deltaY * OPTICFLOW_RAD_PER_COUNT / readPeriod;
+    opticFlowSampleValid = true;
+  } else {
+    // first read after a gap ( period unknown ) or a frame the sensor cannot trust
+    flowRate [ 0 ]       = 0;
+    flowRate [ 1 ]       = 0;
+    opticFlowSampleValid = false;
   }
+
+  if ( flowGyroCount > 0 ) {
+    bodyRate [ 0 ] = flowGyroSum [ 0 ] / ( float ) flowGyroCount;
+    bodyRate [ 1 ] = flowGyroSum [ 1 ] / ( float ) flowGyroCount;
+  } else {
+    bodyRate [ 0 ] = ( float ) gyroADC [ 0 ] * OPTICFLOW_GYRO_RAD_PER_LSB;
+    bodyRate [ 1 ] = ( float ) gyroADC [ 1 ] * OPTICFLOW_GYRO_RAD_PER_LSB;
+  }
+
+  flowGyroSum [ 0 ] = 0;
+  flowGyroSum [ 1 ] = 0;
+  flowGyroCount     = 0;
+
+  last_opticflow_update_ms = millis ( );
+  opticFlowSampleCount++;
 }

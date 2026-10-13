@@ -17,6 +17,10 @@
 
 #pragma once
 
+#ifdef GPS
+  #include "io/gps.h"    // gpsConfig_t, needed by every file that includes this one
+#endif
+
 // System-wide
 #ifdef __cplusplus
 extern "C" {

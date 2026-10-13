@@ -17,6 +17,10 @@
 
 #pragma once
 
+#ifdef GPS
+  #include "flight/navigation.h"    // gpsProfile_t, needed by every file that includes this one
+#endif
+
 
 
 #ifdef __cplusplus

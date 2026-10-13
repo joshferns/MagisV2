@@ -40,7 +40,10 @@ extern float accel_hf[3];
 extern float accel_hf_prev[3];
 extern float velocity_hf[3];
 extern float opticflowHeight;
+extern float opticflowRangeM;
 void runFlowHold(uint32_t currentTime);
+bool opticFlowIsHealthy(void);
+void opticFlowEarthToBody(float earthX, float earthY, float *bodyX, float *bodyY);
 
 
 #ifdef __cplusplus

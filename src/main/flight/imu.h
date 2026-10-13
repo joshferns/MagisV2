@@ -77,6 +77,7 @@ float * earthToBody2D(float* vector);
 
 int16_t imuCalculateHeading(t_fp_vector *vec);
 void imuResetAccelerationSum(int i);
+void imuResetAccelerationSumXYZ(void);
 void imuInit(void);
 
 extern int32_t netAccMagnitude;

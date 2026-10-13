@@ -405,6 +405,15 @@ void annexCode ( void ) {
   tmp2                   = tmp / 100;
   rcCommand [ THROTTLE ] = lookupThrottleRC [ tmp2 ] + ( tmp - tmp2 * 100 ) * ( lookupThrottleRC [ tmp2 + 1 ] - lookupThrottleRC [ tmp2 ] ) / 100;    // [0;1000] -> expo -> [MINTHROTTLE;MAXTHROTTLE]
 
+#ifdef OPTIC_FLOW
+  // Flow lost ( low surface quality, low light, sensor stalled ): hand roll and pitch back to
+  // the pilot and re-latch the hold point when it returns, instead of holding on a reading of
+  // zero motion. The user's command sequence is kept.
+  if ( isLocalisationOn && ARMING_FLAG ( ARMED ) && ! opticFlowIsHealthy ( ) ) {
+    resetPosIntegral ( );
+    resetPosController ( );
+  } else
+#endif
   if ( isLocalisationOn && ARMING_FLAG ( ARMED ) ) {    // for localisation
     rcCommand [ ROLL ]  = getrcDataRoll ( );
     rcCommand [ PITCH ] = getrcDataPitch ( );
@@ -1283,6 +1292,10 @@ void loop ( void ) {
     loopTime = currentTime + masterConfig.looptime;
 
     imuUpdate ( &currentProfile->accelerometerTrims );
+
+#ifdef OPTIC_FLOW
+    opticFlowAccumulateGyro ( );
+#endif
 
     // Measure loop rate just after reading the sensors
     currentTime  = micros ( );

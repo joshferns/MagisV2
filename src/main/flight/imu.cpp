@@ -194,6 +194,15 @@ float calculateAccZLowPassFilterRCTimeConstant ( float accz_lpf_cutoff ) {
 
 t_fp_vector EstG;
 
+// Optic flow consumes accSumXYZ at its own rate. It must not touch accTimeSum, which is the
+// altitude estimator's integration interval for accSum[Z].
+void imuResetAccelerationSumXYZ ( void ) {
+  accSumXYZ [ 0 ] = 0;
+  accSumXYZ [ 1 ] = 0;
+  accSumXYZ [ 2 ] = 0;
+  accSumCountXYZ  = 0;
+}
+
 void imuResetAccelerationSum ( int i ) {
   if ( i == 0 ) {
     accSum [ 0 ] = 0;
