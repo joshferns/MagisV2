@@ -79,9 +79,10 @@ PRIMUS_V5 and PRIMUSX2 still build.
 
 The build is fixed; the feature is not usable on PRIMUS_X2_v1 yet:
 
-- **No free UART.** USART1 = ESP, USART2 = serial RX ( ELRS ), USART3 commented out because
-  PB10/PB11 are the motor 7/8 pins. `USE_QUAD_MIXER_ONLY` is set, so USART3 may be freeable:
-  check `PIN_MAP.md` / `TIMER_MAP.md` before enabling it.
+- **No free UART.** USART1 = ESP, USART2 = serial RX ( ELRS ), and USART3's pins PB10/PB11 are
+  motors M3/M4 ( `PIN_MAP.md` ), so USART3 cannot be freed. **Decision ( 13 Oct 2026 ): the team
+  will use an SPI GPS breakout**, which needs an SPI transport feeding the existing UBX parser
+  and a free chip-select pin.
 - **No port is assigned `FUNCTION_GPS`** in the default serial config, and `FEATURE_GPS` is off.
 - **Navigation is MultiWii-era**: 5 Hz, GPS position only, a 5-sample moving average
   ( ~0.5-1 s lag ), velocity from differenced positions. Not suitable for position hold on a
@@ -90,4 +91,4 @@ The build is fixed; the feature is not usable on PRIMUS_X2_v1 yet:
 ## Next actions
 
 1. Bench checks 1-3 above, then a hover over a textured floor with a flight log.
-2. Decide the GPS hardware path ( UART3 vs sharing USART2 ), then scope GPS/IMU fusion.
+2. GPS over SPI: confirm the module and chip-select pin, add the SPI transport, then scope GPS/IMU fusion.
