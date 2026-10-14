@@ -42,7 +42,7 @@ int8_t gpsBusStatus       = GPS_BUS_NOT_INIT;
 uint16_t gpsBusErrorCount = 0;
 uint16_t gpsBusMaxReadUs  = 0;
 
-  #define GPS_BUS_PROBE_MS 200
+  #define GPS_BUS_PROBE_MS 200    // per call; the caller repeats the probe on SPI ( a booting module drops the poll )
 
 static void noteDuration ( uint32_t startUs ) {
   uint32_t took = micros ( ) - startUs;
@@ -60,12 +60,16 @@ static void noteDuration ( uint32_t startUs ) {
     #ifndef GPS_SPI_CS_PIN
       #define GPS_SPI_CS_PIN GPIO_Pin_7
     #endif
+    #ifndef GPS_SPI_CS_RCC
+      #define GPS_SPI_CS_RCC RCC_AHBPeriph_GPIOB
+    #endif
     #define GPS_SPI_INSTANCE SPI2
 
     // u-blox SPI: mode 0 ( CPOL 0, CPHA 0 ), at most 5.5 MHz. SPI2 runs off APB1 ( 36 MHz ), so
     // prescaler 8 gives 4.5 MHz. The flash and the PAW3903 use mode 3 at 9 MHz: every GPS access
     // saves CR1, switches, and restores it before returning.
-    #define GPS_SPI_CR1_MASK ( ( uint16_t ) ( SPI_CR1_CPOL | SPI_CR1_CPHA | SPI_CR1_BR ) )
+    // LSBFIRST is in the mask too: the user SPI API can set LSB-first on SPI2.
+    #define GPS_SPI_CR1_MASK ( ( uint16_t ) ( SPI_CR1_CPOL | SPI_CR1_CPHA | SPI_CR1_BR | SPI_CR1_LSBFIRST ) )
     #define GPS_SPI_CR1_BITS ( ( uint16_t ) SPI_BaudRatePrescaler_8 )
 
 static uint16_t savedCr1;
@@ -126,7 +130,7 @@ static void spiExchange ( const uint8_t *tx, uint8_t *rx, uint16_t len ) {
 static void busPinInit ( void ) {
   GPIO_InitTypeDef gpio;
 
-  RCC_AHBPeriphClockCmd ( RCC_AHBPeriph_GPIOB, ENABLE );
+  RCC_AHBPeriphClockCmd ( GPS_SPI_CS_RCC, ENABLE );
 
   GPIO_SetBits ( GPS_SPI_CS_GPIO, GPS_SPI_CS_PIN );    // deselected before it becomes an output
   gpio.GPIO_Pin   = GPS_SPI_CS_PIN;
@@ -138,7 +142,7 @@ static void busPinInit ( void ) {
 }
 
 uint16_t gpsBusRead ( uint8_t *buf, uint16_t max ) {
-  if ( gpsBusStatus != GPS_BUS_OK && gpsBusStatus != GPS_BUS_NOT_INIT ) {
+  if ( ( gpsBusStatus != GPS_BUS_OK && gpsBusStatus != GPS_BUS_NOT_INIT ) || max == 0 ) {
     return 0;
   }
 
@@ -185,6 +189,7 @@ bool gpsBusInit ( void ) {
   uint8_t prev = 0;
 
   busPinInit ( );
+  gpsBusStatus = GPS_BUS_NOT_INIT;    // a failed probe costs only time on SPI, so it may be repeated
 
   bool found = false;
   uint16_t got = gpsBusWrite ( ubxMonVerPoll, sizeof ( ubxMonVerPoll ), probe );
@@ -216,8 +221,8 @@ bool gpsBusInit ( void ) {
     #define UBX_DDC_REG_STREAM   0xFF    // data stream; reads 0xFF when empty
 
     // The I2C driver cannot see a NACK: a missing or stuck module costs a full timeout and a
-    // bus recovery that the IMU shares. After this many failures in a row GPS stops.
-    #define GPS_I2C_MAX_CONSECUTIVE_ERRORS 3
+    // bus recovery that the IMU shares. After this many failures in a row GPS stops for good.
+    #define GPS_I2C_MAX_CONSECUTIVE_ERRORS 1    // each failure is a ~10 ms timeout plus an IMU-bus reset
 
 static uint8_t consecutiveErrors = 0;
 
@@ -234,7 +239,7 @@ static void noteI2cResult ( bool ok ) {
 }
 
 uint16_t gpsBusRead ( uint8_t *buf, uint16_t max ) {
-  if ( gpsBusStatus != GPS_BUS_OK ) {
+  if ( gpsBusStatus != GPS_BUS_OK || max == 0 ) {
     return 0;
   }
 

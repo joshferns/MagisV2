@@ -6,11 +6,11 @@
 
 | | |
 |---|---|
-| **Current task** | 1 - Bus transport driver ( SPI2 + I2C1 ) |
-| **Next step** | Task 1: write `drivers/gps_ublox_bus.c` ( SPI and I2C transport ) |
+| **Current task** | none: run /pluto-task next |
+| **Next step** | Task 2: wire `io/gps.cpp` to `gps_ublox_bus` ( bus init / probe retry, poll rate, no serial path ) |
 | **Open questions** | module part number, D_SEL, PB7 free, ESP or ELRS mode ( team ) |
 | **Blocked on** | nothing for tasks 1-8; hardware for task 9 |
-| **Last updated** | 2026-10-13 |
+| **Last updated** | 2026-10-14 |
 
 ## Summary
 
@@ -28,7 +28,7 @@
 
 | # | Title | Status | Depends on | Skills / agent |
 |---|---|---|---|---|
-| 1 | Bus transport driver ( SPI2 + I2C1 ) | in-progress | - | pluto-driver, pluto-rules, c-pro |
+| 1 | Bus transport driver ( SPI2 + I2C1 ) | done 2026-10-14 | - | pluto-driver, pluto-rules, c-pro |
 | 2 | gps.cpp on the bus transport | todo | 1 | pluto-rules, cpp-pro |
 | 3 | NAV-PVT parser | todo | 2 | pluto-rules |
 | 4 | Module configuration over SPI / I2C | todo | 2, 3 | pluto-rules, spec-to-code-compliance |
@@ -60,8 +60,8 @@ read ≤ 12 B from 0xFF; `gpsBusDetect()` probes once at boot. Register in the M
 - **Safety impact:** shares SPI2 with flash and PAW3903 and I2C1 with the IMU; a wrong CR1 restore breaks optic flow, an I2C timeout resets the IMU bus. Every path bounded.
 - **Done when:** builds with `GPS` + `GPS_SPI`, and with `GPS` + `GPS_I2C`; default build unchanged; one call measured ( `micros()` bracket ) under 300 µs by calculation.
 - **Rollback:** comment out `GPS_SPI` / `GPS_I2C`.
-- **Status:** in-progress
-- **Result:**
+- **Status:** done 2026-10-14
+- **Result:** `b0c28aa` + review fixes. SPI 648 B / I2C 288 B object; reads ~160-200 µs ( SPI 64 B ) and ~260 µs ( I2C 8 B ) by calculation; builds clean. As built: probe is inside `gpsBusInit()` ( no separate detect ), SPI reads a fixed 64 B ( 0xFF fill goes to the parser ), I2C reads 8 B from 0xFF without the 0xFD/0xFE count, `gpsBusWrite()` returns SPI's clocked-back bytes, I2C writes need ≥ 2 B. Reviewer: no blocking; 5 should-fix fixed ( LSBFIRST forced, I2C stops on first failure, SPI probe repeatable, ≥ 2 B write rule documented, I2C rate below ).
 
 ### 2. gps.cpp on the bus transport
 
@@ -69,7 +69,7 @@ read ≤ 12 B from 0xFF; `gpsBusDetect()` probes once at boot. Register in the M
 instead of the serial-port lookup ( `featureClear(FEATURE_GPS)` if absent ), forces
 `GPS_UBLOX`, and starts the state machine at configuration; baud negotiation, NMEA and
 passthrough are compiled out ( passthrough also gets the missing `gpsPort` NULL check ).
-`gpsThread()` polls at most every 20 ms and feeds `gpsNewData()` from `gpsBusRead()`. Check whether
+`gpsThread()` polls every 20 ms on SPI and every 10 ms on I2C ( 8 B / 10 ms = 800 B/s ) and feeds `gpsNewData()` from `gpsBusRead()`, plus the bytes `gpsBusWrite()` clocks back on SPI. On SPI a failed probe is repeated about once a second; on I2C it is not. Check whether
 the USART2 `FUNCTION_GPS` default ( config.cpp:336 ) still claims the port in ESP mode; if it must
 go, bump `EEPROM_CONF_VERSION`.
 
@@ -103,7 +103,7 @@ PVT alone. Legacy messages keep working. No RAM change ( union already 344 B ).
 **Description.** Replace the serial init sequence for the bus path: CFG-VALSET ( RAM layer ) for
 M9 / M10 and the legacy CFG-PRT ( SPI port 4 or DDC port 0, UBX out only ), CFG-MSG ( NAV-PVT every
 fix, legacy messages ), CFG-RATE ( 100 ms on SPI, 200 ms on I2C ) and CFG-NAV5 for M8. One message
-per `gpsThread()` call. Checksums checked against the u-blox interface description.
+per `gpsThread()` call; on I2C split into ≤ 10 B writes with no 1-byte tail. **I2C output is NAV-PVT only at 5 Hz** ( 500 B/s against 800 B/s read capacity ); SPI keeps the legacy messages as well. Checksums checked against the u-blox interface description.
 
 - **Depends on:** 2, 3
 - **Skills / agent:** pluto-rules; spec-to-code-compliance against the u-blox M8 / M10 interface descriptions
@@ -235,3 +235,6 @@ defaults ).
 - 2026-10-13 [risk] I2C driver does not detect NACK and recovers the IMU bus on timeout: probe once at boot, disable GPS if absent.
 - 2026-10-13 [risk] SPI2 CR1 save / restore must be exact or optic flow / flash break.
 - 2026-10-13 [out-of-scope] GPS / IMU fusion and GPS position hold.
+- 2026-10-14 [decision] I2C: 8 B per read ( 300 µs cap ), poll every 10 ms, NAV-PVT only at 5 Hz; GPS stops on the first I2C failure ( each costs a ~10 ms timeout and an IMU-bus reset ).
+- 2026-10-14 [decision] SPI probe repeatable ( ~1 s ) because a booting module misses MON-VER; SPI CR1 switch also forces MSB-first.
+- 2026-10-14 [risk] `i2cReadDevice()` ( bus_i2c_stm32f30x.c:405 ) never sends a byte between its TXIS and TC waits, so every call times out and resets I2C1. Not used here; pre-existing, outside this topic.

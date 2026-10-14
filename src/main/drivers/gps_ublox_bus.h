@@ -20,6 +20,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "platform.h"    // target.h: GPS, GPS_SPI, GPS_I2C
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -45,8 +47,8 @@ extern "C" {
 typedef enum {
   GPS_BUS_NOT_INIT    = 0,
   GPS_BUS_OK          = 1,
-  GPS_BUS_NOT_FOUND   = -2,    // no answer at boot; GPS disabled
-  GPS_BUS_DISABLED    = -3,    // too many I2C errors in a row; stopped to protect the IMU bus
+  GPS_BUS_NOT_FOUND   = -2,    // no answer to the probe; SPI may call gpsBusInit ( ) again, I2C stays off
+  GPS_BUS_DISABLED    = -3,    // an I2C transfer failed; stopped for good to protect the IMU bus
 } gpsBusStatus_e;
 
 extern int8_t gpsBusStatus;          // gpsBusStatus_e
@@ -54,14 +56,17 @@ extern uint16_t gpsBusErrorCount;    // failed transfers since boot
 extern uint16_t gpsBusMaxReadUs;     // worst gpsBusRead ( ) / gpsBusWrite ( ) duration seen, us
 
 // Sets up the chip-select pin ( SPI ) and probes for the module, blocking for at most
-// ~200 ms. Returns true when a module answered.
+// ~200 ms. Returns true when a module answered. On SPI a module still booting can miss the
+// probe: the caller repeats it ( about once a second ) until it answers. On I2C call it once.
 bool gpsBusInit ( void );
 
 // Reads up to max bytes ( capped at GPS_BUS_READ_MAX ) from the module into buf and returns
 // how many were stored. Idle fill bytes ( 0xFF ) are returned too: the UBX parser skips them.
 uint16_t gpsBusRead ( uint8_t *buf, uint16_t max );
 
-// Sends len bytes ( at most GPS_BUS_WRITE_MAX ) to the module. On SPI the module clocks its own output back at the same
+// Sends len bytes ( at most GPS_BUS_WRITE_MAX; at least 2 on I2C, where a 1-byte write only
+// moves the module's register pointer ) to the module. A splitter must never leave a 1-byte
+// tail on I2C ( e.g. split 11 bytes as 9 + 2 ). On SPI the module clocks its own output back at the same
 // time; those bytes are stored in rxBuf ( which must hold len bytes ) and their count is
 // returned, so the caller can feed them to the parser. rxBuf may be NULL to discard them.
 // Returns 0 on I2C or on failure.

@@ -17,3 +17,16 @@ Not linked into the image yet ( nothing calls it until task 2 ).
 
 Timing by calculation: SPI read 64 B × ~2.5 µs ≈ 160-200 µs; I2C read 8 B = 11 bytes on the bus
 ≈ 250-260 µs; I2C write 10 B ≈ 250 µs. Measured worst case is kept in `gpsBusMaxReadUs` for task 7's log.
+
+### Review fixes ( pluto-reviewer, no blocking findings )
+
+| Finding | Fix |
+|---|---|
+| User `SPI_Init` can set LSB-first on SPI2 | `SPI_CR1_LSBFIRST` added to the CR1 mask, so the GPS always runs MSB-first |
+| 3 I2C failures = ~30 ms of stalled loop and 3 IMU-bus resets | `GPS_I2C_MAX_CONSECUTIVE_ERRORS` 1 |
+| A 1-byte I2C write tail is dropped silently | Header documents the ≥ 2 B rule and the no-1-byte-tail split ( task 4 ) |
+| One missed 200 ms SPI probe disabled GPS for good | `gpsBusInit()` resets status and may be repeated on SPI ( task 2 retries ~1 s ) |
+| 8 B every 20 ms is 400 B/s < NAV-PVT's 500 B/s on I2C | Plan: I2C polled every 10 ms, NAV-PVT only ( tasks 2 and 4 ) |
+| `gpsBusRead ( buf, 0 )` counted as an I2C error | early return on `max == 0` |
+| CS clock hard-coded to GPIOB | `GPS_SPI_CS_RCC`, default `RCC_AHBPeriph_GPIOB` |
+| Header gating needs target.h | header includes `platform.h` |
