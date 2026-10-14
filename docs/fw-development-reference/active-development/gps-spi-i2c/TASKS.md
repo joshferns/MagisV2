@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Current task** | none: run /pluto-task next |
+| **Current task** | 1 - Bus transport driver ( SPI2 + I2C1 ) |
 | **Next step** | Task 1: write `drivers/gps_ublox_bus.c` ( SPI and I2C transport ) |
 | **Open questions** | module part number, D_SEL, PB7 free, ESP or ELRS mode ( team ) |
 | **Blocked on** | nothing for tasks 1-8; hardware for task 9 |
@@ -28,7 +28,7 @@
 
 | # | Title | Status | Depends on | Skills / agent |
 |---|---|---|---|---|
-| 1 | Bus transport driver ( SPI2 + I2C1 ) | todo | - | pluto-driver, pluto-rules, c-pro |
+| 1 | Bus transport driver ( SPI2 + I2C1 ) | in-progress | - | pluto-driver, pluto-rules, c-pro |
 | 2 | gps.cpp on the bus transport | todo | 1 | pluto-rules, cpp-pro |
 | 3 | NAV-PVT parser | todo | 2 | pluto-rules |
 | 4 | Module configuration over SPI / I2C | todo | 2, 3 | pluto-rules, spec-to-code-compliance |
@@ -60,7 +60,7 @@ read ≤ 12 B from 0xFF; `gpsBusDetect()` probes once at boot. Register in the M
 - **Safety impact:** shares SPI2 with flash and PAW3903 and I2C1 with the IMU; a wrong CR1 restore breaks optic flow, an I2C timeout resets the IMU bus. Every path bounded.
 - **Done when:** builds with `GPS` + `GPS_SPI`, and with `GPS` + `GPS_I2C`; default build unchanged; one call measured ( `micros()` bracket ) under 300 µs by calculation.
 - **Rollback:** comment out `GPS_SPI` / `GPS_I2C`.
-- **Status:** todo
+- **Status:** in-progress
 - **Result:**
 
 ### 2. gps.cpp on the bus transport

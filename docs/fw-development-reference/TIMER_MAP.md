@@ -98,7 +98,7 @@ The full LUT is `pwmConfig[]` in [Peripheral-PWM.cpp:49-61](../../src/main/API-S
 |---------|-----------------|---------|----|-------------------|
 | `PWM_1`  | TIM1_CH1  | PA8  | AF6  | **same as 5th motor output (TIM1_CH1/PA8)** |
 | `PWM_2`  | TIM4_CH1  | PB6  | AF2  | free pin ✅ |
-| `PWM_3`  | TIM4_CH2  | PB7  | AF2  | free pin ✅ |
+| `PWM_3`  | TIM4_CH2  | PB7  | AF2  | free pin ✅ ( ⚠ GPS chip-select when `GPS` + `GPS_SPI` ) |
 | `PWM_4`  | TIM15_CH2 | PB15 | AF1  | **PB15 = ADC_2** (ADC4_IN5) |
 | `PWM_5`  | TIM15_CH1 | PB14 | AF1  | **PB14 = ADC_3** (ADC4_IN4) |
 | `PWM_6`  | TIM4_CH3  | PA13 | AF10 | **PA13 = SWDIO (debug)** |

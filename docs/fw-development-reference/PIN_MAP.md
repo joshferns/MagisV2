@@ -39,7 +39,7 @@ Rev 14; API/ownership facts are from the codebase.
 | **PB4**  | GPIO_12 | — | PWM_8 (TIM3_CH1) | (SPI1_MISO / USART2_RX, no API) | free: DMA1_Ch2 (SPI1_RX) / Ch3 (TIM16_CH1) / Ch6 (USART2_RX) | alloc: TIM3_CH1 (PWM_8) · free: TIM16_CH1 |
 | **PB5**  | GPIO_13 | — | PWM_9 (TIM17_CH1) | (SPI1_MOSI, no API) | free: DMA1_Ch3 (SPI1_TX) | alloc: TIM17_CH1 (PWM_9) · free: TIM3_CH2 / TIM8_CH3 |
 | **PB6**  | GPIO_3  | — | PWM_2 (TIM4_CH1) | (I2C1_SCL alt / USART1_TX, no API) | free: DMA1_Ch6 (I2C1_TX) | alloc: TIM4_CH1 (PWM_2) · free: TIM16_CH1N |
-| **PB7**  | GPIO_4  | — | PWM_3 (TIM4_CH2) | (I2C1_SDA alt / USART1_RX, no API) | free: DMA1_Ch5 (USART1_RX) / Ch7 (I2C1_RX) | alloc: TIM4_CH2 (PWM_3) · free: TIM17_CH1N |
+| **PB7**  | GPIO_4  | — | PWM_3 (TIM4_CH2) | (I2C1_SDA alt / USART1_RX, no API) · ⚠ GPS_CS when `GPS` + `GPS_SPI` ([gps_ublox_bus.c](../../src/main/drivers/gps_ublox_bus.c)) | free: DMA1_Ch5 (USART1_RX) / Ch7 (I2C1_RX) | alloc: TIM4_CH2 (PWM_3) · free: TIM17_CH1N |
 | **PB12** | GPIO_8  | ADC_5 (ADC4_IN3) | — | ⚠ SPI2_NSS / flash CS | alloc: DMA2_Ch2 (ADC4, if ADC_5) | — |
 | **PB13** | GPIO_7  | ADC_4 (ADC3_IN5) | — | ⚠ SPI2_SCK | alloc: DMA2_Ch5 (ADC3, if ADC_4) | — |
 | **PB14** | GPIO_6  | ADC_3 (ADC4_IN4) | PWM_5 (TIM15_CH1) | ⚠ SPI2_MISO | alloc: DMA2_Ch2 (ADC4, if ADC_3) · SPI2_RX would need DMA1_Ch4 (taken) | alloc: TIM15_CH1 (PWM_5) |
@@ -112,7 +112,7 @@ Notes:
 |----------|-----|
 | Spare digital I/O | any GPIO_n not currently used for its other role |
 | Extra ADC input | `ADC_1` (PB2), `ADC_6/7` (PA4/PA5), `ADC_8/9` (PA2/PA3) — avoid ADC_2–5 if flash/blackbox is active |
-| Extra PWM output | `PWM_2/PWM_3` (PB6/PB7) or `PWM_8/PWM_9` (PB4/PB5) — the conflict-free ones |
+| Extra PWM output | `PWM_2/PWM_3` (PB6/PB7) or `PWM_8/PWM_9` (PB4/PB5) — the conflict-free ones ( not `PWM_3` / PB7 when `GPS_SPI` is on: GPS chip-select ) |
 | A DMA-driven SPI device | SPI1 on **PB3/PB4/PB5** → DMA1_Ch2 (RX) + Ch3 (TX), both free (see DMA_MAP §4) |
 | A timer / DMA pacer with no pin | **TIM6 / TIM7** (see TIMER_MAP §4) |
 | A free DMA channel with no contender | **DMA2_Channel4** |

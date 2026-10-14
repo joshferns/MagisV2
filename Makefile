@@ -337,7 +337,8 @@ PRIMUSX2_DRIVERS = 	drivers/adc.cpp \
 		   							drivers/system_stm32f30x.c \
 		   							drivers/timer.cpp \
 		   							drivers/timer_stm32f30x.c \
-		   							drivers/barometer_icp10111.cpp 
+		   							drivers/barometer_icp10111.cpp \
+		   							drivers/gps_ublox_bus.c 
 
 PRIMUSX2_SENSORS = 	sensors/barometer.cpp \
 

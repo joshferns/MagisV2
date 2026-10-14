@@ -154,6 +154,12 @@ extern "C" {
 // #define BLACKBOX
 #define SERIAL_RX
 // #define GPS
+// GPS transport ( with GPS ): one of these, else the serial GPS path ( no free UART on this board ).
+// #define GPS_SPI                 // u-blox on SPI2, chip-select below ( PB7 gives up PWM_3 / GPIO_4 )
+// #define GPS_I2C                 // u-blox on I2C1 at GPS_I2C_ADDR
+#define GPS_SPI_CS_GPIO GPIOB
+#define GPS_SPI_CS_PIN  GPIO_Pin_7
+#define GPS_I2C_ADDR    0x42
 // #define GTUNE
 // #define DISPLAY
 // #define USE_SERVOS
