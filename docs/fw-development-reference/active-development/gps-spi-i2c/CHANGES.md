@@ -169,3 +169,12 @@ runs on RX loops, `updateGpsStateForHomeAndHoldMode()` on control loops ).
 
 Builds: default 100.8 KB ( unchanged; `Gps_Get` is not linked unless called ), GPS serial 109.0 KB,
 GPS + SPI 107.8 KB, GPS + I2C 107.4 KB; PRIMUS_V5 and PRIMUSX2 build; no new gate entries.
+
+### Review fixes ( pluto-reviewer, no code defects )
+
+| Finding | Fix |
+|---|---|
+| Wiki said a build without SPI / I2C reads 0; the serial GPS path fills the same globals | Wiki: "`GPS` only" row and "Serial GPS limits" ( NMEA: fix type 0, PDOP 9999, accuracy 65535, velocity 0; UBX: pedestrian, 2D possible ) |
+| Wiki understated I2C: any single failed transfer, also in flight, turns GPS off | Wiki row reworded |
+| Unbacked figures ( accuracy, PDOP, course speed, wander ) | Removed or made qualitative until task 9 measures them |
+| Task 6 done-when contradicted the always-present header; `User_Space_API.md` missing from pipeline docs | TASKS.md updated |

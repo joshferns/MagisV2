@@ -6,8 +6,8 @@
 
 | | |
 |---|---|
-| **Current task** | 6 - User API: GPS read functions |
-| **Next step** | Task 6: user API `API/GPS.h` ( read-only fix, numSat, lat / lon, altitude, NED velocity, hAcc ) + wiki |
+| **Current task** | none: run /pluto-task next |
+| **Next step** | Task 7: GPS fields in the PlutoPilot.cpp diagnostic log ( ≤ 130 B / tick ) and TESTING.md bench / outdoor procedure |
 | **Open questions** | module part number, D_SEL, PB7 free, ESP or ELRS mode ( team ) |
 | **Blocked on** | nothing for tasks 1-8; hardware for task 9 |
 | **Last updated** | 2026-10-15 |
@@ -21,7 +21,7 @@
 | **Done when** | Indoors: module detected, configured, streaming NAV-PVT ( no fix ). Outdoors, hand-held: 3D fix, numSat ≥ 6, position and velocity consistent with walking, visible in the flight log, the user API, the app ( MSP_RAW_GPS ) and `navigation.cpp`. GPS_HOLD / HOME and `GPS_angle` locked out. |
 | **Target** | PRIMUS_X2_v1 |
 | **Analysis** | Option A, transport shim ( [DESIGN.md](DESIGN.md) ) |
-| **Pipeline docs affected** | `subsystems/Hardware_Bus_Pipeline.md`, new GPS subsystem doc + link from `Firmware_Pipeline.md`, `PIN_MAP.md`, `TIMER_MAP.md`, `docs/API/` GPS wiki |
+| **Pipeline docs affected** | `subsystems/Hardware_Bus_Pipeline.md`, new GPS subsystem doc + link from `Firmware_Pipeline.md`, `PIN_MAP.md`, `TIMER_MAP.md`, `docs/API/` GPS wiki, `subsystems/User_Space_API.md` |
 | **Order** | 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 |
 
 ## Index
@@ -33,7 +33,7 @@
 | 3 | NAV-PVT parser | done 2026-10-15 | 2 | pluto-rules |
 | 4 | Module configuration over SPI / I2C | done 2026-10-15 | 2, 3 | pluto-rules, spec-to-code-compliance |
 | 5 | Lock out GPS hold / home and GPS_angle; MSP check | done 2026-10-15 | 2 | pluto-rules |
-| 6 | User API: GPS read functions | in-progress | 3 | pluto-rules, cpp-pro |
+| 6 | User API: GPS read functions | done 2026-10-15 | 3 | pluto-rules, cpp-pro |
 | 7 | Flight-log fields and bench procedure | todo | 3 | pluto-flighttest |
 | 8 | Build gate | todo | 1-7 | pluto-build |
 | 9 | Hardware validation | todo | 8 | pluto-flighttest |
@@ -139,10 +139,10 @@ lat / lon in 1e-7 deg, altitude cm, NED velocity cm/s, hAcc cm ) implemented in 
 - **Skills / agent:** pluto-rules; cpp-pro
 - **Files:** new `API/GPS.h`, `API-Src/GPS.cpp`, [PlutoPilot.h](../../../../PlutoPilot.h), Makefile, `docs/API/`
 - **Safety impact:** none ( read-only ).
-- **Done when:** builds with and without `GPS`; public headers unchanged for non-GPS builds.
+- **Done when:** builds with and without `GPS`; existing public headers unchanged; `Gps_Get` returns 0 on non-GPS builds.
 - **Rollback:** revert the commit.
-- **Status:** in-progress
-- **Result:**
+- **Status:** done 2026-10-15
+- **Result:** `bec5e69` + wiki fixes. `API/GPS.h` `Gps_Get` ( 15 options ), 0 without GPS; globals split into `io/gps_data.h`; wiki `docs/API/GPS_API_WIKI.md` covers SPI / I2C / serial paths. All targets build, no new warnings. Reviewer: no code defects; 3 doc should-fix applied.
 
 ### 7. Flight-log fields and bench procedure
 
