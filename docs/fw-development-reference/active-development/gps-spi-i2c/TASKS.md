@@ -6,8 +6,8 @@
 
 | | |
 |---|---|
-| **Current task** | 4 - Module configuration over SPI / I2C |
-| **Next step** | Task 4: module configuration over SPI / I2C ( CFG-PRT, CFG-MSG NAV-PVT, CFG-RATE, CFG-VALSET; I2C PVT-only ) |
+| **Current task** | none: run /pluto-task next |
+| **Next step** | Task 5: lock out GPS_HOLD / GPS_HOME and keep GPS_angle at 0; confirm MSP GPS frames |
 | **Open questions** | module part number, D_SEL, PB7 free, ESP or ELRS mode ( team ) |
 | **Blocked on** | nothing for tasks 1-8; hardware for task 9 |
 | **Last updated** | 2026-10-15 |
@@ -31,7 +31,7 @@
 | 1 | Bus transport driver ( SPI2 + I2C1 ) | done 2026-10-14 | - | pluto-driver, pluto-rules, c-pro |
 | 2 | gps.cpp on the bus transport | done 2026-10-15 | 1 | pluto-rules, cpp-pro |
 | 3 | NAV-PVT parser | done 2026-10-15 | 2 | pluto-rules |
-| 4 | Module configuration over SPI / I2C | in-progress | 2, 3 | pluto-rules, spec-to-code-compliance |
+| 4 | Module configuration over SPI / I2C | done 2026-10-15 | 2, 3 | pluto-rules, spec-to-code-compliance |
 | 5 | Lock out GPS hold / home and GPS_angle; MSP check | todo | 2 | pluto-rules |
 | 6 | User API: GPS read functions | todo | 3 | pluto-rules, cpp-pro |
 | 7 | Flight-log fields and bench procedure | todo | 3 | pluto-flighttest |
@@ -111,8 +111,8 @@ per `gpsThread()` call; on I2C split into ≤ 10 B writes with no 1-byte tail. *
 - **Safety impact:** none.
 - **Done when:** builds; every UBX frame's checksum verified by a host-side script.
 - **Rollback:** revert the commit.
-- **Status:** in-progress
-- **Result:**
+- **Status:** done 2026-10-15
+- **Result:** `147ad0b` + review fixes. SPI list 174 B / 8 frames ( VALSET, CFG-PRT port 4, MSG PVT / POSLLH / STATUS / VELNED, RATE 100 ms, NAV5 dyn 6 ); I2C list 179 B / 10 frames ( VALSET, NMEA off ×6, MSG PVT, RATE 200 ms, NAV5 ), no DDC CFG-PRT. Frames generated and checked by script ( all valid ); VALSET keys checked against the key table. No new warnings on any GPS build vs pre-topic. Reviewer: no blocking; 2 should-fix applied.
 
 ### 5. Lock out GPS hold / home and GPS_angle; MSP check
 
@@ -241,6 +241,8 @@ defaults ).
 - 2026-10-15 [decision] USART2 keeps its `FUNCTION_GPS` default; the bus path never opens it, so no `EEPROM_CONF_VERSION` bump.
 - 2026-10-15 [decision] Bus setup lists use dynamic model 6 ( airborne < 1 g ) through a NAV5 / VALSET that changes only that field; the serial path keeps pedestrian.
 - 2026-10-15 [decision] Configuration goes to the RAM layer only ( VALSET layer RAM, no CFG-CFG save ): the firmware reconfigures after every boot and every communication loss.
+- 2026-10-15 [decision] I2C: the DDC port is never reconfigured from itself ( CFG-PRT ); NMEA off per message instead. SPI drops NAV-SOL ( 64 % of read capacity at 10 Hz ).
+- 2026-10-15 [decision] Warning check for GPS builds: gate output compared with a serial-GPS build of `e766113`; must add no entries.
 - 2026-10-15 [out-of-scope] u-blox M7 ( protocol 14, 84-byte NAV-PVT ): rejected by the length check; M7 modules would fall back to the legacy messages on SPI only.
 - 2026-10-15 [risk] `autoConfig` OFF on the bus path leaves the module on NMEA and the UBX parser never syncs ( default is ON ).
 - 2026-10-14 [risk] `i2cReadDevice()` ( bus_i2c_stm32f30x.c:405 ) never sends a byte between its TXIS and TC waits, so every call times out and resets I2C1. Not used here; pre-existing, outside this topic.

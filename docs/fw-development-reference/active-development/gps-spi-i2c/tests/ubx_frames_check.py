@@ -10,7 +10,10 @@ and a correct 8-bit Fletcher checksum. Prints one line per frame and exits 1 on 
 import re
 import sys
 
-SRC = "src/main/io/gps.cpp"
+import os
+
+# repo root is five levels up from this file
+SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..", "src", "main", "io", "gps.cpp")
 
 def frames_of(data):
     pos, out = 0, []

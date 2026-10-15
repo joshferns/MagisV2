@@ -95,6 +95,8 @@ holds PDOP × 100 on the PVT path ( SOL also gave position DOP ).
 | [tests/ubx_frames_gen.py](tests/ubx_frames_gen.py) | Generates the frames ( checksums computed, not typed ). Reproduces the firmware's existing POSLLH and 5 Hz CFG-RATE frames byte for byte. | No hand-made checksums. |
 | [tests/ubx_frames_check.py](tests/ubx_frames_check.py) | Reads every UBX array and SBAS message out of `gps.cpp` and checks sync, lengths and checksums. Result: all 8 lists valid ( `ubloxInit`, both `ubloxBusInit`, 5 SBAS ). A corrupted byte is caught. | Task 4 "done when". |
 
+( Sizes above are the first version; see the review fixes below for the final lists. )
+
 **Dynamic model change:** the serial `ubloxInit` uses pedestrian ( 3 ); the bus lists use airborne
 < 1 g ( 6 ), and set only that field ( NAV5 mask 0x0001 ) so the module's other navigation settings stay as they are.
 
@@ -103,3 +105,14 @@ VALSET keys were checked against the documented key table; one recalled value wa
 
 Builds ( PRIMUS_X2_v1 ): GPS + SPI 108.3 KB / 15.7 KB, GPS + I2C 107.9 KB / 15.6 KB; no new warnings;
 default build gate clean.
+
+### Review fixes ( pluto-reviewer, no blocking findings )
+
+| Finding | Fix |
+|---|---|
+| I2C list reconfigured the DDC port from the DDC port: one NACK while it restarts stops GPS for good ( `GPS_I2C_MAX_CONSECUTIVE_ERRORS` 1 ) and resets the IMU's bus | DDC CFG-PRT removed. NMEA turned off by CFG-MSG F0-00..05 rate 0 ( this port ); VALSET still sets I2C output UBX-only on M9 / M10. Final I2C list 179 B, 10 frames |
+| SPI at 264 B per fix × 10 Hz = 83 % of the 3200 B/s read capacity | NAV-SOL dropped ( PVT carries numSV, fix and DOP ): 204 B per fix, 64 %. Final SPI list 174 B, 8 frames |
+| Warning gate never ran on a GPS build | Gate run on GPS + SPI, GPS + I2C and GPS serial, compared with a serial-GPS build of `e766113` ( before this topic ): no new gate entries. Two new `DISABLE_STATE ( GPS_FIX )` uses had added two `runtime_config.h` sign-conversion warnings; replaced by `gpsSetFixState()` with explicit types |
+| `ubx_frames_check.py` only ran from the repo root | Path resolved from the script's location |
+| New arrays used 4-space indent | Generator emits 2-space, matching the file |
+| Notes | Dyn model 6 gives no 2D fixes ( expect 3D or none in the hand-held test ); check `GPS_ubxNakCount` and the real PVT rate on an M10 at 10 Hz in task 9 |
