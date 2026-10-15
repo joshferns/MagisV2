@@ -6,8 +6,8 @@
 
 | | |
 |---|---|
-| **Current task** | 3 - NAV-PVT parser |
-| **Next step** | Task 3: NAV-PVT in the UBX parser ( struct, class check, field mapping, host-side frame test ) |
+| **Current task** | none: run /pluto-task next |
+| **Next step** | Task 4: module configuration over SPI / I2C ( CFG-PRT, CFG-MSG NAV-PVT, CFG-RATE, CFG-VALSET; I2C PVT-only ) |
 | **Open questions** | module part number, D_SEL, PB7 free, ESP or ELRS mode ( team ) |
 | **Blocked on** | nothing for tasks 1-8; hardware for task 9 |
 | **Last updated** | 2026-10-15 |
@@ -30,7 +30,7 @@
 |---|---|---|---|---|
 | 1 | Bus transport driver ( SPI2 + I2C1 ) | done 2026-10-14 | - | pluto-driver, pluto-rules, c-pro |
 | 2 | gps.cpp on the bus transport | done 2026-10-15 | 1 | pluto-rules, cpp-pro |
-| 3 | NAV-PVT parser | in-progress | 2 | pluto-rules |
+| 3 | NAV-PVT parser | done 2026-10-15 | 2 | pluto-rules |
 | 4 | Module configuration over SPI / I2C | todo | 2, 3 | pluto-rules, spec-to-code-compliance |
 | 5 | Lock out GPS hold / home and GPS_angle; MSP check | todo | 2 | pluto-rules |
 | 6 | User API: GPS read functions | todo | 3 | pluto-rules, cpp-pro |
@@ -95,8 +95,8 @@ PVT alone. Legacy messages keep working. No RAM change ( union already 344 B ).
 - **Safety impact:** none ( data only ).
 - **Done when:** builds; a hand-made PVT frame ( host-side check script ) decodes to the expected values.
 - **Rollback:** revert the commit.
-- **Status:** in-progress
-- **Result:**
+- **Status:** done 2026-10-15
+- **Result:** `ad803ec` + review notes. NAV-PVT decoded via `io/gps_ubx_pvt.h` ( host test: all checks pass ), class check, ACK / NAK counters, legacy messages suppressed while PVT is current, new globals reset on loss. +0.6 KB flash, no new warnings. Reviewer: no blocking, no should-fix.
 
 ### 4. Module configuration over SPI / I2C
 
@@ -239,5 +239,6 @@ defaults ).
 - 2026-10-14 [decision] SPI CR1 switch also forces MSB-first.
 - 2026-10-15 [decision] ( replaces the 2026-10-14 "SPI probe repeatable" note ) SPI probe runs once at boot; a miss is retried by the reconfigure-on-timeout loop ( ~2.5 s ), and SPI reads drop to one a second until a frame parses.
 - 2026-10-15 [decision] USART2 keeps its `FUNCTION_GPS` default; the bus path never opens it, so no `EEPROM_CONF_VERSION` bump.
+- 2026-10-15 [out-of-scope] u-blox M7 ( protocol 14, 84-byte NAV-PVT ): rejected by the length check; M7 modules would fall back to the legacy messages on SPI only.
 - 2026-10-15 [risk] `autoConfig` OFF on the bus path leaves the module on NMEA and the UBX parser never syncs ( default is ON ).
 - 2026-10-14 [risk] `i2cReadDevice()` ( bus_i2c_stm32f30x.c:405 ) never sends a byte between its TXIS and TC waits, so every call times out and resets I2C1. Not used here; pre-existing, outside this topic.

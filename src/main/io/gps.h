@@ -143,8 +143,8 @@ extern uint16_t GPS_hdop;                  // GPS signal quality
 extern uint8_t GPS_update;                 // it's a binary toogle to distinct a GPS position update
 extern uint32_t GPS_packetCount;
 extern uint32_t GPS_svInfoReceivedCount;
-extern uint16_t GPS_altitude;              // altitude in 0.1m
-extern uint16_t GPS_speed;                 // speed in 0.1m/s
+extern uint16_t GPS_altitude;              // altitude in m above mean sea level
+extern uint16_t GPS_speed;                 // ground speed in cm/s
 extern uint16_t GPS_ground_course;         // degrees * 10
 extern int16_t GPS_velNED[3];              // cm/s north / east / down
 extern uint16_t GPS_hAcc;                  // cm, horizontal accuracy estimate ( 65535 = unknown )

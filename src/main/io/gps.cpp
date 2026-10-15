@@ -594,6 +594,12 @@ void gpsThread ( void ) {
       // TODO - move some / all of these into gpsData
       GPS_numSat = 0;
       DISABLE_STATE ( GPS_FIX );
+      GPS_fixType      = 0;
+      GPS_hAcc         = 65535;    // unknown
+      GPS_vAcc         = 65535;
+      GPS_velNED [ 0 ] = 0;
+      GPS_velNED [ 1 ] = 0;
+      GPS_velNED [ 2 ] = 0;
       gpsSetState ( GPS_INITIALIZING );
 
       break;

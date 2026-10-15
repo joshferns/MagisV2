@@ -77,3 +77,12 @@ Builds ( PRIMUS_X2_v1 ): GPS serial 109.5 KB, GPS + SPI 108.3 KB / 15.7 KB, GPS 
 
 Units note: `GPS_speed` is cm/s on both paths ( gps.h still says 0.1 m/s, pre-existing ); `GPS_hdop`
 holds PDOP × 100 on the PVT path ( SOL also gave position DOP ).
+
+### Review notes ( pluto-reviewer, no blocking or should-fix findings )
+
+| Note | Action |
+|---|---|
+| New globals keep stale values after GPS loss | Reset in `GPS_LOST_COMMUNICATION`: fix type 0, hAcc / vAcc 65535 ( unknown ), velocity 0 |
+| `gps.h` said `GPS_altitude` 0.1 m and `GPS_speed` 0.1 m/s | Comments corrected to m and cm/s ( what both paths store ) |
+| 84-byte M7 NAV-PVT rejected silently | Out of scope ( decisions log ) |
+| Legacy-suppression window | Verified: one update per epoch for in-order messages; at most 1 s gap when PVT stops |
