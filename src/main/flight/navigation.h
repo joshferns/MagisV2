@@ -109,6 +109,11 @@ void updateGpsWaypointsAndMode(void);
 #ifndef GPS_NAV_MODES_LOCKED
   #define GPS_NAV_MODES_LOCKED 1
 #endif
+#if ! GPS_NAV_MODES_LOCKED
+  // Unlocking brings back the forced BOXGPSHOLD and the hard-coded GPS_hold target in
+  // updateGpsWaypointsAndMode ( ). Remove those ( GPS / IMU fusion topic ) before lifting this.
+  #error "GPS_NAV_MODES_LOCKED 0 is not supported yet: see navigation.h and the gps-spi-i2c topic"
+#endif
 void navigationInit(gpsProfile_t *initialGpsProfile, pidProfile_t *pidProfile);
 void onGpsNewData(void);
 

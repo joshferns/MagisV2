@@ -143,3 +143,16 @@ MSP_COMP_GPS ( serial_msp.cpp:1146-1160 ) read `GPS_FIX`, `GPS_numSat`, `GPS_coo
 
 Builds: GPS serial 109.1 KB, GPS + SPI 107.8 KB, GPS + I2C 107.4 KB ( −0.5 KB, locked code is dead );
 no new gate entries vs the pre-topic GPS build; default gate clean.
+
+### Review notes ( pluto-reviewer, no blocking or should-fix findings )
+
+Whole-tree check confirmed: no reachable path sets GPS_HOLD_MODE / GPS_HOME_MODE or a non-zero
+`GPS_angle`; the lock does not depend on the call order in `loop()` ( `updateGpsWaypointsAndMode()`
+runs on RX loops, `updateGpsStateForHomeAndHoldMode()` on control loops ).
+
+| Note | Action |
+|---|---|
+| `GPS_NAV_MODES_LOCKED 0` from target.h / `-D` would silently bring back the forced box and hard-coded target | [navigation.h](../../../../src/main/flight/navigation.h): `#error` when unlocked; verified the build stops |
+| With GPS compiled in, `MSP_SET_WP` ( wp 0 and 16, `alt != 0` ) writes `AltHold` in flight; reachable only since GPS compiles | [serial_msp.cpp](../../../../src/main/io/serial_msp.cpp): the `AltHold` writes are compiled only when unlocked |
+| `MSP_SET_WP` wp 0 overwrites `GPS_home` and sets `GPS_FIX_HOME` | Kept ( data only: distance / direction to home in MSP_COMP_GPS ); logged |
+| `GPS_FILTERING 0` with `#if defined()` always compiles the filter | Pre-existing, harmless while `nav_mode` cannot reach POSHOLD; logged for the fusion topic |

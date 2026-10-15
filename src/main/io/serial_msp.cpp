@@ -1679,13 +1679,19 @@ static bool processInCommand ( void ) {
         GPS_home [ LON ] = lon;
         DISABLE_FLIGHT_MODE ( GPS_HOME_MODE );    // with this flag, GPS_set_next_wp will be called in the next loop -- OK with SERIAL GPS / OK with I2C GPS
         ENABLE_STATE ( GPS_FIX_HOME );
+  #if ! GPS_NAV_MODES_LOCKED
         if ( alt != 0 )
           AltHold = alt;             // temporary implementation to test feature with apps
+  #else
+        UNUSED ( alt );              // waypoints must not move the altitude-hold setpoint while GPS navigation is locked
+  #endif
       } else if ( wp_no == 16 ) {    // OK with SERIAL GPS  --  NOK for I2C GPS / needs more code dev in order to inject GPS coord inside I2C GPS
         GPS_hold [ LAT ] = lat;
         GPS_hold [ LON ] = lon;
+  #if ! GPS_NAV_MODES_LOCKED
         if ( alt != 0 )
           AltHold = alt;    // temporary implementation to test feature with apps
+  #endif
         nav_mode = NAV_MODE_WP;
         GPS_set_next_wp ( &GPS_hold [ LAT ], &GPS_hold [ LON ] );
       }
