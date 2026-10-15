@@ -11,13 +11,14 @@
  #  Created Date: Sat, 22nd Feb 2025                                           #
  #  Brief:                                                                     #
  #  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  #
- #  Last Modified: Fri, 8th May 2026                                           #
- #  Modified By: AJ                                                            #
+ #  Last Modified: Thu, 15th Oct 2026                                          #
+ #  Modified By: Claude                                                        #
  #  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  #
  #  HISTORY:                                                                   #
  #  Date      	By	Comments                                                   #
  #  ----------	---	---------------------------------------------------------  #
  #  2026-04-04	techsavvyomi	Added RGB-LED.h include for WS2812B API        #
+ #  2026-10-15	Claude	Added GPS.h include for the GPS read API               #
 *******************************************************************************/
 
 #ifndef _PlutoPilot_H_
@@ -38,6 +39,7 @@
 #include "src/main/API/XRanging.h"
 #include "src/main/API/RGB-LED.h"
 #include "src/main/API/Oled.h"
+#include "src/main/API/GPS.h"
 
 void plutoRxConfig ( void );
 

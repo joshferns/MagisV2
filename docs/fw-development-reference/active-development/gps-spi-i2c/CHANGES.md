@@ -156,3 +156,16 @@ runs on RX loops, `updateGpsStateForHomeAndHoldMode()` on control loops ).
 | With GPS compiled in, `MSP_SET_WP` ( wp 0 and 16, `alt != 0` ) writes `AltHold` in flight; reachable only since GPS compiles | [serial_msp.cpp](../../../../src/main/io/serial_msp.cpp): the `AltHold` writes are compiled only when unlocked |
 | `MSP_SET_WP` wp 0 overwrites `GPS_home` and sets `GPS_FIX_HOME` | Kept ( data only: distance / direction to home in MSP_COMP_GPS ); logged |
 | `GPS_FILTERING 0` with `#if defined()` always compiles the filter | Pre-existing, harmless while `nav_mode` cannot reach POSHOLD; logged for the fusion topic |
+
+## Task 6 - User API: GPS read functions ( 2026-10-15 )
+
+| File | Change | Why |
+|---|---|---|
+| [API/GPS.h](../../../../src/main/API/GPS.h) | New public header: `GPS_Option_e` ( `Gps_Available`, `Gps_Fix_3D`, `Gps_Fix_Type`, `Gps_Satellites`, `Gps_Latitude`, `Gps_Longitude`, `Gps_Altitude`, `Gps_Vel_North/East/Down`, `Gps_Ground_Speed`, `Gps_Course`, `Gps_H/V_Accuracy`, `Gps_PDOP` ) and `int32_t Gps_Get ( option )`. | Same shape as `Bms_Get`; `int32_t` carries lat / lon. `Gps_` prefix avoids firmware names such as `GPS_FIX`. |
+| [API-Src/GPS.cpp](../../../../src/main/API-Src/GPS.cpp) | Implementation; every option 0 when `SENSOR_GPS` is clear or the firmware has no `GPS`. Altitude cast back through `int16_t` so heights below sea level read negative. | User code compiles and runs on every build. |
+| [io/gps_data.h](../../../../src/main/io/gps_data.h) | New: the GPS solution globals and `LAT` / `LON`, moved out of `io/gps.h` ( which includes it ). | `io/gps.h` includes `common/atomic.h`, whose `#warning` fires in every includer: the API would have added 3 gate warnings. |
+| [PlutoPilot.h](../../../../PlutoPilot.h), [Makefile](../../../../Makefile) | `#include "src/main/API/GPS.h"`; `API-Src/GPS.cpp` in `DRONA_API`. | Wiring. |
+| [docs/API/GPS_API_WIKI.md](../../../API/GPS_API_WIKI.md) | New wiki: quick start, builds with GPS, option table with units, limits. Marks API 1.5.0 as pending. | Public API change ( pluto-rules ). `API_Version` 1.4.0 → 1.5.0 and `FW_Version` bump happen at commit ( task 12, pluto-commit ). |
+
+Builds: default 100.8 KB ( unchanged; `Gps_Get` is not linked unless called ), GPS serial 109.0 KB,
+GPS + SPI 107.8 KB, GPS + I2C 107.4 KB; PRIMUS_V5 and PRIMUSX2 build; no new gate entries.

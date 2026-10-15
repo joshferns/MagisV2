@@ -295,6 +295,7 @@ DRONA_API =	API-Src/Status-LED.cpp \
 		    		API-Src/Serial-IO-I2C.cpp \
 		    		API-Src/Serial-IO-SPI.cpp \
 						API-Src/BMS.cpp \
+						API-Src/GPS.cpp \
 						API-Src/FC-Config-PID.cpp \
 						API-Src/FC-Config-Setpoints.cpp \
 						API-Src/FC-Control-Status.cpp \

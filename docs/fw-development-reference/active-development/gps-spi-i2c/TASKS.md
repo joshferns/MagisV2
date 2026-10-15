@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Current task** | none: run /pluto-task next |
+| **Current task** | 6 - User API: GPS read functions |
 | **Next step** | Task 6: user API `API/GPS.h` ( read-only fix, numSat, lat / lon, altitude, NED velocity, hAcc ) + wiki |
 | **Open questions** | module part number, D_SEL, PB7 free, ESP or ELRS mode ( team ) |
 | **Blocked on** | nothing for tasks 1-8; hardware for task 9 |
@@ -33,7 +33,7 @@
 | 3 | NAV-PVT parser | done 2026-10-15 | 2 | pluto-rules |
 | 4 | Module configuration over SPI / I2C | done 2026-10-15 | 2, 3 | pluto-rules, spec-to-code-compliance |
 | 5 | Lock out GPS hold / home and GPS_angle; MSP check | done 2026-10-15 | 2 | pluto-rules |
-| 6 | User API: GPS read functions | todo | 3 | pluto-rules, cpp-pro |
+| 6 | User API: GPS read functions | in-progress | 3 | pluto-rules, cpp-pro |
 | 7 | Flight-log fields and bench procedure | todo | 3 | pluto-flighttest |
 | 8 | Build gate | todo | 1-7 | pluto-build |
 | 9 | Hardware validation | todo | 8 | pluto-flighttest |
@@ -141,7 +141,7 @@ lat / lon in 1e-7 deg, altitude cm, NED velocity cm/s, hAcc cm ) implemented in 
 - **Safety impact:** none ( read-only ).
 - **Done when:** builds with and without `GPS`; public headers unchanged for non-GPS builds.
 - **Rollback:** revert the commit.
-- **Status:** todo
+- **Status:** in-progress
 - **Result:**
 
 ### 7. Flight-log fields and bench procedure
@@ -246,6 +246,7 @@ defaults ).
 - 2026-10-15 [risk] Found: `updateGpsWaypointsAndMode()` forces BOXGPSHOLD on and holds towards hard-coded `GPS_hold` coordinates ( since `8b06067` ). Locked out by `GPS_NAV_MODES_LOCKED`; the fusion topic must remove the forced box and the hard-coded point before lifting the lock.
 - 2026-10-15 [decision] While GPS navigation is locked, `MSP_SET_WP` does not write `AltHold`; `GPS_NAV_MODES_LOCKED 0` is a build error until the fusion topic.
 - 2026-10-15 [risk] For the fusion topic: `MSP_SET_WP` wp 0 overwrites `GPS_home`; `GPS_FILTERING` is always compiled ( `#if defined` on a 0 macro ).
+- 2026-10-15 [decision] `Gps_Get` exists in every build and returns 0 without GPS, so user code compiles everywhere; `API_Version` 1.5.0 at commit.
 - 2026-10-15 [out-of-scope] u-blox M7 ( protocol 14, 84-byte NAV-PVT ): rejected by the length check; M7 modules would fall back to the legacy messages on SPI only.
 - 2026-10-15 [risk] `autoConfig` OFF on the bus path leaves the module on NMEA and the UBX parser never syncs ( default is ON ).
 - 2026-10-14 [risk] `i2cReadDevice()` ( bus_i2c_stm32f30x.c:405 ) never sends a byte between its TXIS and TC waits, so every call times out and resets I2C1. Not used here; pre-existing, outside this topic.

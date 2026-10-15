@@ -56,8 +56,6 @@
 extern "C" {
 #endif 
 
-#define LAT 0
-#define LON 1
 
 #define GPS_DEGREES_DIVIDER 10000000L
 
@@ -136,22 +134,7 @@ typedef struct gpsData_s {
 extern char gpsPacketLog[GPS_PACKET_LOG_ENTRY_COUNT];
 
 extern gpsData_t gpsData;
-extern int32_t GPS_coord[2];               // LAT/LON
-
-extern uint8_t GPS_numSat;
-extern uint16_t GPS_hdop;                  // GPS signal quality
-extern uint8_t GPS_update;                 // it's a binary toogle to distinct a GPS position update
-extern uint32_t GPS_packetCount;
-extern uint32_t GPS_svInfoReceivedCount;
-extern uint16_t GPS_altitude;              // altitude in m above mean sea level
-extern uint16_t GPS_speed;                 // ground speed in cm/s
-extern uint16_t GPS_ground_course;         // degrees * 10
-extern int16_t GPS_velNED[3];              // cm/s north / east / down
-extern uint16_t GPS_hAcc;                  // cm, horizontal accuracy estimate ( 65535 = unknown )
-extern uint16_t GPS_vAcc;                  // cm, vertical accuracy estimate ( 65535 = unknown )
-extern uint8_t GPS_fixType;                // UBX fix type: 0 none, 2 2D, 3 3D, ...
-extern uint16_t GPS_ubxAckCount;           // UBX-ACK-ACK received
-extern uint16_t GPS_ubxNakCount;           // UBX-ACK-NAK received
+#include "io/gps_data.h"           // GPS_coord, GPS_numSat, ... ( no atomic.h, so the user API can include it )
 extern uint8_t GPS_numCh;                  // Number of channels
 extern uint8_t GPS_svinfo_chn[16];         // Channel number
 extern uint8_t GPS_svinfo_svid[16];        // Satellite ID
