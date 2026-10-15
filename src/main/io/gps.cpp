@@ -228,6 +228,9 @@ static gpsProvider_e gpsProvider ( void ) {
       #define GPS_BUS_POLL_MS 20
     #endif
     #define GPS_BUS_BOOT_WAIT_MS 500    // let the module finish booting before configuring it
+    // SPI with no module heard yet: listen once a second instead of every poll, so a missing
+    // module does not cost 50 SPI2 transfers a second ( configuration writes keep their rate ).
+    #define GPS_BUS_SEARCH_POLL_MS 1000
 
 static uint8_t gpsBusBuf [ GPS_BUS_WRITE_MAX > GPS_BUS_READ_MAX ? GPS_BUS_WRITE_MAX : GPS_BUS_READ_MAX ];
 
@@ -546,7 +549,10 @@ void gpsThread ( void ) {
   }
 
   // configuring: the write is this call's transfer ( SPI returns the bytes clocked back )
-  if ( gpsData.state != GPS_CONFIGURE ) {
+  static uint32_t lastReadMs = 0;
+  bool searching             = ( gpsBusStatus != GPS_BUS_OK ) && ( nowMs - lastReadMs < GPS_BUS_SEARCH_POLL_MS );
+  if ( gpsData.state != GPS_CONFIGURE && ! searching ) {
+    lastReadMs = nowMs;
     gpsFeedBytes ( gpsBusBuf, gpsBusRead ( gpsBusBuf, sizeof ( gpsBusBuf ) ) );
   }
   #else

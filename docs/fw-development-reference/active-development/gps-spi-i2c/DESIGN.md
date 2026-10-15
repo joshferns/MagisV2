@@ -29,7 +29,8 @@ faking them, and keeps the bus code in one driver that `pluto-driver` and the ma
   shared with the IMU on timeout, so the module is **probed once at boot** and GPS is disabled
   if it does not answer.
 - **Rate.** `gpsThread()` polls every 20 ms on SPI, 10 ms on I2C ( it is called on every non-RX spin ).
-  Hard cap per poll: 300 µs. A failed SPI probe is repeated about once a second.
+  Hard cap per poll: 300 µs. A missed SPI probe is not repeated: the reconfigure-on-timeout loop
+  ( ~2.5 s ) retries, and until a frame is parsed SPI reads drop to one a second.
 - **Configuration.** Sent once per call, one message at a time: CFG-VALSET ( M9 / M10 ) and the
   legacy CFG-PRT / CFG-MSG / CFG-RATE / CFG-NAV5 ( M8 ). A module ignores or NAKs the set it does
   not support. Output: UBX only, NAV-PVT every fix; on SPI also legacy POSLLH / VELNED / SOL / STATUS

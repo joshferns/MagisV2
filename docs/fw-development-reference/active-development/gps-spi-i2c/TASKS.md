@@ -6,11 +6,11 @@
 
 | | |
 |---|---|
-| **Current task** | 2 - gps.cpp on the bus transport |
-| **Next step** | Task 2: wire `io/gps.cpp` to `gps_ublox_bus` ( bus init / probe retry, poll rate, no serial path ) |
+| **Current task** | none: run /pluto-task next |
+| **Next step** | Task 3: NAV-PVT in the UBX parser ( struct, class check, field mapping, host-side frame test ) |
 | **Open questions** | module part number, D_SEL, PB7 free, ESP or ELRS mode ( team ) |
 | **Blocked on** | nothing for tasks 1-8; hardware for task 9 |
-| **Last updated** | 2026-10-14 |
+| **Last updated** | 2026-10-15 |
 
 ## Summary
 
@@ -29,7 +29,7 @@
 | # | Title | Status | Depends on | Skills / agent |
 |---|---|---|---|---|
 | 1 | Bus transport driver ( SPI2 + I2C1 ) | done 2026-10-14 | - | pluto-driver, pluto-rules, c-pro |
-| 2 | gps.cpp on the bus transport | in-progress | 1 | pluto-rules, cpp-pro |
+| 2 | gps.cpp on the bus transport | done 2026-10-15 | 1 | pluto-rules, cpp-pro |
 | 3 | NAV-PVT parser | todo | 2 | pluto-rules |
 | 4 | Module configuration over SPI / I2C | todo | 2, 3 | pluto-rules, spec-to-code-compliance |
 | 5 | Lock out GPS hold / home and GPS_angle; MSP check | todo | 2 | pluto-rules |
@@ -69,7 +69,7 @@ read ≤ 12 B from 0xFF; `gpsBusDetect()` probes once at boot. Register in the M
 instead of the serial-port lookup ( `featureClear(FEATURE_GPS)` if absent ), forces
 `GPS_UBLOX`, and starts the state machine at configuration; baud negotiation, NMEA and
 passthrough are compiled out ( passthrough also gets the missing `gpsPort` NULL check ).
-`gpsThread()` polls every 20 ms on SPI and every 10 ms on I2C ( 8 B / 10 ms = 800 B/s ) and feeds `gpsNewData()` from `gpsBusRead()`, plus the bytes `gpsBusWrite()` clocks back on SPI. On SPI a failed probe is repeated about once a second; on I2C it is not. Check whether
+`gpsThread()` polls every 20 ms on SPI and every 10 ms on I2C ( 8 B / 10 ms = 800 B/s ) and feeds `gpsNewData()` from `gpsBusRead()`, plus the bytes `gpsBusWrite()` clocks back on SPI. On SPI a missed probe is retried by the reconfigure-on-timeout loop ( reads one a second until a frame parses ); on I2C GPS stays off. Check whether
 the USART2 `FUNCTION_GPS` default ( config.cpp:336 ) still claims the port in ESP mode; if it must
 go, bump `EEPROM_CONF_VERSION`.
 
@@ -79,8 +79,8 @@ go, bump `EEPROM_CONF_VERSION`.
 - **Safety impact:** none in flight while modes are locked out ( task 5 ); boot path changes when GPS is on.
 - **Done when:** builds; serial GPS build ( `GPS` alone ) unchanged; no unbounded loop in `gpsThread()`.
 - **Rollback:** comment out `GPS_SPI` / `GPS_I2C`.
-- **Status:** in-progress
-- **Result:**
+- **Status:** done 2026-10-15
+- **Result:** `3dddd36` + review fix. Bus path skips the serial port, forces UBX, sends setup in ≤ `GPS_BUS_WRITE_MAX` pieces ( no 1-byte tail ), one transfer per call at 20 ms ( SPI ) / 10 ms ( I2C ), reads once a second until a frame parses. SPI 107.6 KB / I2C 107.2 KB, no new warnings. Reviewer: no blocking; search-rate fix applied.
 
 ### 3. NAV-PVT parser
 
@@ -236,5 +236,8 @@ defaults ).
 - 2026-10-13 [risk] SPI2 CR1 save / restore must be exact or optic flow / flash break.
 - 2026-10-13 [out-of-scope] GPS / IMU fusion and GPS position hold.
 - 2026-10-14 [decision] I2C: 8 B per read ( 300 µs cap ), poll every 10 ms, NAV-PVT only at 5 Hz; GPS stops on the first I2C failure ( each costs a ~10 ms timeout and an IMU-bus reset ).
-- 2026-10-14 [decision] SPI probe repeatable ( ~1 s ) because a booting module misses MON-VER; SPI CR1 switch also forces MSB-first.
+- 2026-10-14 [decision] SPI CR1 switch also forces MSB-first.
+- 2026-10-15 [decision] ( replaces the 2026-10-14 "SPI probe repeatable" note ) SPI probe runs once at boot; a miss is retried by the reconfigure-on-timeout loop ( ~2.5 s ), and SPI reads drop to one a second until a frame parses.
+- 2026-10-15 [decision] USART2 keeps its `FUNCTION_GPS` default; the bus path never opens it, so no `EEPROM_CONF_VERSION` bump.
+- 2026-10-15 [risk] `autoConfig` OFF on the bus path leaves the module on NMEA and the UBX parser never syncs ( default is ON ).
 - 2026-10-14 [risk] `i2cReadDevice()` ( bus_i2c_stm32f30x.c:405 ) never sends a byte between its TXIS and TC waits, so every call times out and resets I2C1. Not used here; pre-existing, outside this topic.

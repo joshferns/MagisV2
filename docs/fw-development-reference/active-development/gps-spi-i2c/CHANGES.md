@@ -50,5 +50,14 @@ Builds ( PRIMUS_X2_v1 ): GPS serial 108.9 KB / 15.6 KB ( unchanged ), GPS + SPI 
 GPS + I2C 107.2 KB / 15.6 KB. No `gps.cpp` / `gps_ublox_bus` warnings beyond the 21 already in the
 serial GPS build. Default build gate clean.
 
-A missing SPI module costs one reconfigure cycle every ~3.4 s ( 2.5 s timeout + 0.5 s wait + ~18
-writes ), each write < 200 µs.
+A missing SPI module costs one reconfigure cycle every ~2.5 s ( ~16 writes, each < 200 µs ) and one
+64 B read a second ( review fix: reads every 20 ms only once a frame has been parsed ).
+
+### Review fixes ( pluto-reviewer, no blocking findings )
+
+| Finding | Fix |
+|---|---|
+| No SPI module = a 64 B SPI2 read every 20 ms forever ( ~1 % CPU, constant traffic beside flash / PAW3903 ) | Until `gpsBusStatus` is `GPS_BUS_OK`, reads drop to one a second ( `GPS_BUS_SEARCH_POLL_MS` ); config writes keep their rate |
+| Docs said "probe repeated about once a second" / "~3.4 s cycle" | DESIGN, TASKS decision and this file corrected |
+| Interim `ubloxInit` asks ~820 B/s on I2C ( 800 B/s link ) | Left to task 4 ( PVT-only on I2C ); an I2C bench test before task 4 will drop frames |
+| `autoConfig` OFF on the bus path leaves the module on NMEA | Logged; default is ON |
