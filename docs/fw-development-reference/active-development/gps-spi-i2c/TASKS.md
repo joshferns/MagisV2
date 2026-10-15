@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Current task** | none: run /pluto-task next |
+| **Current task** | 2 - gps.cpp on the bus transport |
 | **Next step** | Task 2: wire `io/gps.cpp` to `gps_ublox_bus` ( bus init / probe retry, poll rate, no serial path ) |
 | **Open questions** | module part number, D_SEL, PB7 free, ESP or ELRS mode ( team ) |
 | **Blocked on** | nothing for tasks 1-8; hardware for task 9 |
@@ -29,7 +29,7 @@
 | # | Title | Status | Depends on | Skills / agent |
 |---|---|---|---|---|
 | 1 | Bus transport driver ( SPI2 + I2C1 ) | done 2026-10-14 | - | pluto-driver, pluto-rules, c-pro |
-| 2 | gps.cpp on the bus transport | todo | 1 | pluto-rules, cpp-pro |
+| 2 | gps.cpp on the bus transport | in-progress | 1 | pluto-rules, cpp-pro |
 | 3 | NAV-PVT parser | todo | 2 | pluto-rules |
 | 4 | Module configuration over SPI / I2C | todo | 2, 3 | pluto-rules, spec-to-code-compliance |
 | 5 | Lock out GPS hold / home and GPS_angle; MSP check | todo | 2 | pluto-rules |
@@ -79,7 +79,7 @@ go, bump `EEPROM_CONF_VERSION`.
 - **Safety impact:** none in flight while modes are locked out ( task 5 ); boot path changes when GPS is on.
 - **Done when:** builds; serial GPS build ( `GPS` alone ) unchanged; no unbounded loop in `gpsThread()`.
 - **Rollback:** comment out `GPS_SPI` / `GPS_I2C`.
-- **Status:** todo
+- **Status:** in-progress
 - **Result:**
 
 ### 3. NAV-PVT parser

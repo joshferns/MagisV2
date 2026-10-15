@@ -30,3 +30,25 @@ Timing by calculation: SPI read 64 B × ~2.5 µs ≈ 160-200 µs; I2C read 8 B =
 | `gpsBusRead ( buf, 0 )` counted as an I2C error | early return on `max == 0` |
 | CS clock hard-coded to GPIOB | `GPS_SPI_CS_RCC`, default `RCC_AHBPeriph_GPIOB` |
 | Header gating needs target.h | header includes `platform.h` |
+
+## Task 2 - gps.cpp on the bus transport ( 2026-10-15 )
+
+| File | Change | Why |
+|---|---|---|
+| [io/gps.cpp](../../../../src/main/io/gps.cpp) `gpsInit()` | Under `GPS_ON_BUS`: no serial-port lookup; `gpsBusInit()` probes once. I2C miss → `featureClear(FEATURE_GPS)`. SPI miss → carry on. State → `GPS_INITIALIZING`. | No UART on this board; never poll a missing I2C module ( IMU bus ); a booting SPI module misses the probe. |
+| `gpsProvider()`, `gpsPortIsBus()` | Bus path always UBX ( stored `provider` defaults to NMEA ); `gpsNewFrame()` and `gpsInitHardware()` use it. | No runtime write into `masterConfig`. |
+| `gpsInitUbloxBus()` + `gpsBusSendList()` | 500 ms boot wait, then `ubloxInit` and the SBAS frame one write per call: ≤ `GPS_BUS_WRITE_MAX`, never across a frame, never a 1-byte tail; SPI bytes clocked back are parsed. No baud states. | Replaces the serial `gpsInitUblox()` steps that need a UART. |
+| `gpsThread()` | Bus path: one transfer per call, every 20 ms ( SPI ) / 10 ms ( I2C ); write while configuring, else a read; GPS sensor cleared and state `GPS_UNKNOWN` if the I2C driver disabled itself. `autoBaud` skipped. | Bounded loop cost; I2C rate per the task 1 review. |
+| `gpsNewData()` | `gpsBusStatus = GPS_BUS_OK` on the first parsed frame. | Marks a module that missed the SPI probe as found. |
+| `gpsEnablePassthrough()` | Returns if `gpsPort` is NULL. | CLI passthrough dereferenced a NULL port without a serial GPS. |
+| [drivers/gps_ublox_bus.c](../../../../src/main/drivers/gps_ublox_bus.c) | SPI reads / writes no longer gated on `gpsBusStatus`. | The reconfigure-on-timeout loop ( 2.5 s no data → re-init ) is the SPI retry; no blocking re-probe. |
+
+USART2 keeps its `FUNCTION_GPS` default ( config.cpp:336 ): the bus path never opens it, so no
+`EEPROM_CONF_VERSION` bump.
+
+Builds ( PRIMUS_X2_v1 ): GPS serial 108.9 KB / 15.6 KB ( unchanged ), GPS + SPI 107.6 KB / 15.7 KB,
+GPS + I2C 107.2 KB / 15.6 KB. No `gps.cpp` / `gps_ublox_bus` warnings beyond the 21 already in the
+serial GPS build. Default build gate clean.
+
+A missing SPI module costs one reconfigure cycle every ~3.4 s ( 2.5 s timeout + 0.5 s wait + ~18
+writes ), each write < 200 µs.

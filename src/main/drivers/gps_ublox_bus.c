@@ -141,8 +141,10 @@ static void busPinInit ( void ) {
   GPIO_Init ( GPS_SPI_CS_GPIO, &gpio );
 }
 
+// SPI transfers are allowed in every state: a module that missed the boot probe is found by
+// the GPS state machine's reconfigure-on-timeout loop, at the cost of a few idle transfers.
 uint16_t gpsBusRead ( uint8_t *buf, uint16_t max ) {
-  if ( ( gpsBusStatus != GPS_BUS_OK && gpsBusStatus != GPS_BUS_NOT_INIT ) || max == 0 ) {
+  if ( max == 0 ) {
     return 0;
   }
 
@@ -158,7 +160,7 @@ uint16_t gpsBusRead ( uint8_t *buf, uint16_t max ) {
 }
 
 uint16_t gpsBusWrite ( const uint8_t *buf, uint16_t len, uint8_t *rxBuf ) {
-  if ( ( gpsBusStatus != GPS_BUS_OK && gpsBusStatus != GPS_BUS_NOT_INIT ) || len > GPS_BUS_WRITE_MAX ) {
+  if ( len > GPS_BUS_WRITE_MAX ) {
     return 0;
   }
 
@@ -189,7 +191,7 @@ bool gpsBusInit ( void ) {
   uint8_t prev = 0;
 
   busPinInit ( );
-  gpsBusStatus = GPS_BUS_NOT_INIT;    // a failed probe costs only time on SPI, so it may be repeated
+  gpsBusStatus = GPS_BUS_NOT_INIT;
 
   bool found = false;
   uint16_t got = gpsBusWrite ( ubxMonVerPoll, sizeof ( ubxMonVerPoll ), probe );

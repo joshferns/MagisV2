@@ -41,6 +41,8 @@
 #include "io/display.h"
 #include "io/gps.h"
 
+#include "drivers/gps_ublox_bus.h"
+
 #include "flight/gps_conversion.h"
 #include "flight/pid.h"
 #include "flight/navigation.h"
@@ -201,6 +203,117 @@ static void gpsSetState ( gpsState_e state ) {
   gpsData.messageState   = GPS_MESSAGE_STATE_IDLE;
 }
 
+static bool gpsPortIsBus ( void ) {
+  #ifdef GPS_ON_BUS
+  return true;
+  #else
+  return false;
+  #endif
+}
+
+// A GPS on SPI or I2C is always a u-blox speaking UBX, whatever the stored provider says.
+static gpsProvider_e gpsProvider ( void ) {
+  #ifdef GPS_ON_BUS
+  return GPS_UBLOX;
+  #else
+  return ( gpsProvider_e ) gpsConfig->provider;
+  #endif
+}
+
+  #ifdef GPS_ON_BUS
+    // Poll period: 8 B every 10 ms on I2C ( 800 B/s, NAV-PVT at 5 Hz needs 500 ), 64 B every 20 ms on SPI.
+    #ifdef GPS_I2C
+      #define GPS_BUS_POLL_MS 10
+    #else
+      #define GPS_BUS_POLL_MS 20
+    #endif
+    #define GPS_BUS_BOOT_WAIT_MS 500    // let the module finish booting before configuring it
+
+static uint8_t gpsBusBuf [ GPS_BUS_WRITE_MAX > GPS_BUS_READ_MAX ? GPS_BUS_WRITE_MAX : GPS_BUS_READ_MAX ];
+
+static void gpsFeedBytes ( const uint8_t *data, uint16_t len ) {
+  for ( uint16_t i = 0; i < len; i++ ) {
+    gpsNewData ( data [ i ] );
+  }
+}
+
+// Sends the next piece of a UBX message list ( back-to-back frames ) and returns true once the
+// whole list has gone out. *offset is the byte position in the list. One write per call, at most
+// GPS_BUS_WRITE_MAX bytes, never across a frame boundary and never leaving a 1-byte tail.
+static bool gpsBusSendList ( const uint8_t *list, uint32_t listLen, uint32_t *offset ) {
+  uint32_t pos = 0;
+
+  // find the frame that contains *offset
+  while ( pos + 6 <= listLen ) {
+    uint32_t frameLen = 8u + list [ pos + 4 ] + ( ( uint32_t ) list [ pos + 5 ] << 8 );
+    if ( pos + frameLen > listLen ) {
+      break;    // malformed list: stop instead of reading past it
+    }
+    if ( *offset < pos + frameLen ) {
+      uint32_t left  = pos + frameLen - *offset;
+      uint16_t chunk = ( uint16_t ) ( left <= GPS_BUS_WRITE_MAX ? left : GPS_BUS_WRITE_MAX );
+      if ( left > GPS_BUS_WRITE_MAX && left - chunk == 1 ) {
+        chunk--;    // e.g. 11 bytes go as 9 + 2 on I2C
+      }
+      uint16_t got = gpsBusWrite ( &list [ *offset ], chunk, gpsBusBuf );
+      gpsFeedBytes ( gpsBusBuf, got );    // SPI clocks the module's output back during a write
+      *offset += chunk;
+      return false;
+    }
+    pos += frameLen;
+  }
+
+  return true;
+}
+
+static void gpsInitUbloxBus ( void ) {
+  switch ( gpsData.state ) {
+    case GPS_INITIALIZING:
+    case GPS_CHANGE_BAUD:
+      if ( millis ( ) - gpsData.state_ts < GPS_BUS_BOOT_WAIT_MS ) {
+        return;
+      }
+      gpsSetState ( GPS_CONFIGURE );
+      break;
+
+    case GPS_CONFIGURE: {
+      if ( gpsConfig->autoConfig == GPS_AUTOCONFIG_OFF ) {
+        gpsSetState ( GPS_RECEIVING_DATA );
+        break;
+      }
+
+      if ( gpsData.messageState == GPS_MESSAGE_STATE_IDLE ) {
+        gpsData.messageState = GPS_MESSAGE_STATE_INIT;
+      }
+
+      uint32_t offset = gpsData.state_position;
+
+      if ( gpsData.messageState == GPS_MESSAGE_STATE_INIT ) {
+        if ( gpsBusSendList ( ubloxInit, sizeof ( ubloxInit ), &offset ) ) {
+          offset               = 0;
+          gpsData.messageState = GPS_MESSAGE_STATE_SBAS;
+        }
+      } else if ( gpsData.messageState == GPS_MESSAGE_STATE_SBAS ) {
+        if ( gpsBusSendList ( ubloxSbas [ gpsConfig->sbasMode ].message, UBLOX_SBAS_MESSAGE_LENGTH, &offset ) ) {
+          offset               = 0;
+          gpsData.messageState = ( gpsMessageState_e ) GPS_MESSAGE_STATE_ENTRY_COUNT;
+        }
+      }
+
+      gpsData.state_position = offset;
+
+      if ( gpsData.messageState >= GPS_MESSAGE_STATE_ENTRY_COUNT ) {
+        gpsSetState ( GPS_RECEIVING_DATA );
+      }
+      break;
+    }
+
+    default:
+      break;
+  }
+}
+  #endif    // GPS_ON_BUS
+
 void gpsInit ( serialConfig_t *initialSerialConfig, gpsConfig_t *initialGpsConfig ) {
   serialConfig = initialSerialConfig;
 
@@ -216,6 +329,20 @@ void gpsInit ( serialConfig_t *initialSerialConfig, gpsConfig_t *initialGpsConfi
   gpsSetState ( GPS_UNKNOWN );
 
   gpsData.lastMessage = millis ( );
+
+  #ifdef GPS_ON_BUS
+  UNUSED ( serialConfig );
+    #ifdef GPS_I2C
+  if ( ! gpsBusInit ( ) ) {
+    featureClear ( FEATURE_GPS );    // never poll a missing module on the bus the IMU shares
+    return;
+  }
+    #else
+  ( void ) gpsBusInit ( );    // a miss is not final on SPI: the timeout loop keeps reconfiguring
+    #endif
+  gpsSetState ( GPS_INITIALIZING );
+  return;
+  #endif
 
   serialPortConfig_t *gpsPortConfig = findSerialPortConfig ( FUNCTION_GPS );
   if ( ! gpsPortConfig ) {
@@ -382,7 +509,12 @@ void gpsInitUblox ( void ) {
 }
 
 void gpsInitHardware ( void ) {
-  switch ( gpsConfig->provider ) {
+  #ifdef GPS_ON_BUS
+  gpsInitUbloxBus ( );
+  return;
+  #endif
+
+  switch ( gpsProvider ( ) ) {
     case GPS_NMEA:
       gpsInitNmea ( );
       break;
@@ -394,11 +526,36 @@ void gpsInitHardware ( void ) {
 }
 
 void gpsThread ( void ) {
+  #ifdef GPS_ON_BUS
+  // called on every non-RX spin of loop ( ): poll the bus at a fixed rate, one transfer per call
+  static uint32_t lastPollMs = 0;
+  uint32_t nowMs             = millis ( );
+  if ( nowMs - lastPollMs < GPS_BUS_POLL_MS ) {
+    return;
+  }
+  lastPollMs = nowMs;
+
+  if ( gpsBusStatus == GPS_BUS_DISABLED ) {
+    if ( gpsData.state != GPS_UNKNOWN ) {
+      sensorsClear ( SENSOR_GPS );
+      GPS_numSat = 0;
+      DISABLE_STATE ( GPS_FIX );
+      gpsSetState ( GPS_UNKNOWN );
+    }
+    return;
+  }
+
+  // configuring: the write is this call's transfer ( SPI returns the bytes clocked back )
+  if ( gpsData.state != GPS_CONFIGURE ) {
+    gpsFeedBytes ( gpsBusBuf, gpsBusRead ( gpsBusBuf, sizeof ( gpsBusBuf ) ) );
+  }
+  #else
   // read out available GPS bytes
   if ( gpsPort ) {
     while ( serialRxBytesWaiting ( gpsPort ) )
       gpsNewData ( serialRead ( gpsPort ) );
   }
+  #endif
 
   switch ( gpsData.state ) {
     case GPS_UNKNOWN:
@@ -414,7 +571,7 @@ void gpsThread ( void ) {
 
     case GPS_LOST_COMMUNICATION:
       gpsData.timeouts++;
-      if ( gpsConfig->autoBaud ) {
+      if ( gpsConfig->autoBaud && ! gpsPortIsBus ( ) ) {
         // try another rate
         gpsData.baudrateIndex++;
         gpsData.baudrateIndex %= GPS_INIT_ENTRIES;
@@ -445,6 +602,9 @@ static void gpsNewData ( uint16_t c ) {
   }
 
   // new data received and parsed, we're in business
+  #ifdef GPS_ON_BUS
+  gpsBusStatus = GPS_BUS_OK;    // also marks a module that missed the SPI boot probe as found
+  #endif
   gpsData.lastLastMessage = gpsData.lastMessage;
   gpsData.lastMessage     = millis ( );
   sensorsSet ( SENSOR_GPS );
@@ -462,7 +622,7 @@ static void gpsNewData ( uint16_t c ) {
 }
 
 bool gpsNewFrame ( uint8_t c ) {
-  switch ( gpsConfig->provider ) {
+  switch ( gpsProvider ( ) ) {
     case GPS_NMEA:     // NMEA
       return gpsNewFrameNMEA ( c );
     case GPS_UBLOX:    // UBX binary
@@ -1049,6 +1209,9 @@ static bool gpsNewFrameUBLOX ( uint8_t data ) {
 }
 
 void gpsEnablePassthrough ( serialPort_t *gpsPassthroughPort ) {
+  if ( ! gpsPort ) {
+    return;    // no serial GPS ( GPS on SPI / I2C, or no port configured )
+  }
   waitForSerialPortToFinishTransmitting ( gpsPort );
   waitForSerialPortToFinishTransmitting ( gpsPassthroughPort );
 

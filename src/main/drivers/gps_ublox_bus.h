@@ -47,7 +47,7 @@ extern "C" {
 typedef enum {
   GPS_BUS_NOT_INIT    = 0,
   GPS_BUS_OK          = 1,
-  GPS_BUS_NOT_FOUND   = -2,    // no answer to the probe; SPI may call gpsBusInit ( ) again, I2C stays off
+  GPS_BUS_NOT_FOUND   = -2,    // no answer to the boot probe. I2C: GPS off. SPI: transfers continue, set OK on the first frame
   GPS_BUS_DISABLED    = -3,    // an I2C transfer failed; stopped for good to protect the IMU bus
 } gpsBusStatus_e;
 
@@ -56,8 +56,9 @@ extern uint16_t gpsBusErrorCount;    // failed transfers since boot
 extern uint16_t gpsBusMaxReadUs;     // worst gpsBusRead ( ) / gpsBusWrite ( ) duration seen, us
 
 // Sets up the chip-select pin ( SPI ) and probes for the module, blocking for at most
-// ~200 ms. Returns true when a module answered. On SPI a module still booting can miss the
-// probe: the caller repeats it ( about once a second ) until it answers. On I2C call it once.
+// ~200 ms. Call once at boot. Returns true when a module answered. On SPI a module still
+// booting can miss the probe, so SPI reads and writes keep working after a miss and the caller
+// sets gpsBusStatus to GPS_BUS_OK when it parses a frame. On I2C a miss means GPS stays off.
 bool gpsBusInit ( void );
 
 // Reads up to max bytes ( capped at GPS_BUS_READ_MAX ) from the module into buf and returns
