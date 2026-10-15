@@ -188,3 +188,13 @@ GPS + SPI 107.8 KB, GPS + I2C 107.4 KB; PRIMUS_V5 and PRIMUSX2 build; no new gat
 
 Builds: log off = default unchanged, gate clean; log on: GPS serial 110.1 KB, SPI 109.0 KB, I2C 108.6 KB,
 no warnings in PlutoPilot.cpp, no new gate entries.
+
+### Review fixes ( pluto-reviewer, no blocking findings )
+
+| Finding | Fix |
+|---|---|
+| Without a fix lat / lon read 0, so `dN` / `dE` jumped ~1000 km and the line reached ~145 B | Offsets computed only with a 3D fix, clamped to ±99999 cm; worst realistic tick 125 B |
+| Status lines used up `n` without printing it ( n stepped by 2 every 10th record = fake 10 % loss ) | `n` on the status line too |
+| "`Ak` ≥ 4" did not match the task 4 lists; an M10 would fail it | Exact Ak / Nk per module and bus in TESTING.md |
+| Update rate not measurable from `dN` | `Pk`: valid frames per status interval, expected values tabled |
+| `cosf` every tick | Computed once with the origin |

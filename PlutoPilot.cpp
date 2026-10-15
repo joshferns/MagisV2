@@ -8,6 +8,7 @@
 #ifdef GPS_BENCH_LOG
   #include <math.h>
   #include "platform.h"    // target defines: GPS, GPS_SPI, GPS_I2C
+  #include "common/maths.h"
 
   #if defined( GPS ) && ( defined( GPS_SPI ) || defined( GPS_I2C ) )
 extern "C" {
@@ -20,6 +21,7 @@ extern uint16_t gpsBusMaxReadUs;     // worst bus transfer, us
 extern "C" {
 extern uint16_t GPS_ubxAckCount;     // UBX-ACK-ACK ( configuration accepted )
 extern uint16_t GPS_ubxNakCount;     // UBX-ACK-NAK ( configuration rejected )
+extern uint32_t GPS_packetCount;     // valid UBX / NMEA frames since boot
 }
   #endif
 
@@ -28,9 +30,14 @@ static uint32_t gpsLogLastMs = 0;
 static uint32_t gpsLogTick   = 0;
 static bool gpsLogHaveOrigin = false;
 static int32_t gpsLogOriginLat, gpsLogOriginLon;    // deg * 1e7, first 3D fix
+static float gpsLogCosLat;                          // cos ( origin latitude ), set with the origin
+  #ifdef GPS
+static uint32_t gpsLogLastPackets = 0;
+  #endif
 
-// One record every 100 ms. Every tenth record is a status line in place of the solution line,
-// so no tick prints more than ~110 bytes ( Monitor_Print budget ~130 B / tick ).
+// One record every 100 ms. Every tenth record is a status line in place of the solution line.
+// Worst case with realistic values ( t 8 digits, |dN|, |dE| <= 99999 cm, |v| <= 9999 cm/s ):
+// solution 125 B, status 125 B, marker 35 B ( Monitor_Print budget ~130 B / tick ).
 static void gpsBenchLog ( void ) {
   uint32_t now = millis ( );
   if ( now - gpsLogLastMs < 100 ) {
@@ -46,8 +53,9 @@ static void gpsBenchLog ( void ) {
   }
 
   if ( gpsLogTick % 10 == 0 ) {
-    // status line, ~75 B
+    // status line
     Monitor_Print ( "t:", ( int ) now );
+    Monitor_Print ( " n:", ( int ) gpsLogTick );    // keeps n continuous across both line types
     Monitor_Print ( " Av:", ( int ) Gps_Get ( Gps_Available ) );
   #if defined( GPS ) && ( defined( GPS_SPI ) || defined( GPS_I2C ) )
     Monitor_Print ( " Bs:", ( int ) gpsBusStatus );
@@ -56,26 +64,28 @@ static void gpsBenchLog ( void ) {
   #endif
   #ifdef GPS
     Monitor_Print ( " Ak:", ( int ) GPS_ubxAckCount );
-    Monitor_Println ( " Nk:", ( int ) GPS_ubxNakCount );
+    Monitor_Print ( " Nk:", ( int ) GPS_ubxNakCount );
+    Monitor_Println ( " Pk:", ( int ) ( GPS_packetCount - gpsLogLastPackets ) );    // frames in the last ~1 s
+    gpsLogLastPackets = GPS_packetCount;
   #else
     Monitor_Println ( "" );
   #endif
     return;
   }
 
-  // solution line, ~110 B
-  int32_t lat = Gps_Get ( Gps_Latitude );
-  int32_t lon = Gps_Get ( Gps_Longitude );
-  if ( ! gpsLogHaveOrigin && Gps_Get ( Gps_Fix_3D ) ) {
-    gpsLogOriginLat  = lat;
-    gpsLogOriginLon  = lon;
-    gpsLogHaveOrigin = true;
-  }
+  // solution line
   int32_t northCm = 0, eastCm = 0;    // from the first 3D fix; 1e-7 deg of latitude = 1.1132 cm
-  if ( gpsLogHaveOrigin ) {
-    float cosLat = cosf ( ( float ) gpsLogOriginLat * 1.0e-7f * 0.0174532925f );
-    northCm      = ( int32_t ) ( ( float ) ( lat - gpsLogOriginLat ) * 1.1132f );
-    eastCm       = ( int32_t ) ( ( float ) ( lon - gpsLogOriginLon ) * 1.1132f * cosLat );
+  if ( Gps_Get ( Gps_Fix_3D ) ) {     // without a fix lat / lon read 0: keep the offsets at 0
+    int32_t lat = Gps_Get ( Gps_Latitude );
+    int32_t lon = Gps_Get ( Gps_Longitude );
+    if ( ! gpsLogHaveOrigin ) {
+      gpsLogOriginLat  = lat;
+      gpsLogOriginLon  = lon;
+      gpsLogCosLat     = cosf ( ( float ) lat * 1.0e-7f * 0.0174532925f );
+      gpsLogHaveOrigin = true;
+    }
+    northCm = ( int32_t ) constrainf ( ( float ) ( lat - gpsLogOriginLat ) * 1.1132f, -99999.0f, 99999.0f );
+    eastCm  = ( int32_t ) constrainf ( ( float ) ( lon - gpsLogOriginLon ) * 1.1132f * gpsLogCosLat, -99999.0f, 99999.0f );
   }
 
   Monitor_Print ( "t:", ( int ) now );
