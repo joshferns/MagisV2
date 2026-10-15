@@ -642,6 +642,11 @@ static int32_t wrap_36000 ( int32_t angle ) {
 }
 
 void updateGpsStateForHomeAndHoldMode ( void ) {
+  #if GPS_NAV_MODES_LOCKED
+  GPS_angle [ AI_ROLL ]  = 0;    // no GPS correction reaches the PID controllers
+  GPS_angle [ AI_PITCH ] = 0;
+  return;
+  #endif
   float sin_yaw_y = sin_approx ( heading * 0.0174532925f );
   float cos_yaw_x = cos_approx ( heading * 0.0174532925f );
   if ( gpsProfile->nav_slew_rate ) {
@@ -659,6 +664,23 @@ void updateGpsWaypointsAndMode ( void ) {
 
   bool resetNavNow             = false;
   static bool gpsReadyBeepDone = false;
+
+  #if GPS_NAV_MODES_LOCKED
+  // Locked: keep both modes off and the navigation state clear, whatever the RC switches, MSP
+  // waypoints ( MSP_SET_WP sets nav_mode ) or a previous state asked for. The forced
+  // ACTIVATE_RC_MODE ( BOXGPSHOLD ) below is never reached.
+  if ( FLIGHT_MODE ( GPS_HOLD_MODE ) || FLIGHT_MODE ( GPS_HOME_MODE ) || nav_mode != NAV_MODE_NONE ) {
+    DISABLE_FLIGHT_MODE ( GPS_HOME_MODE );
+    DISABLE_FLIGHT_MODE ( GPS_HOLD_MODE );
+    nav_mode = NAV_MODE_NONE;
+    GPS_reset_nav ( );    // also zeroes GPS_angle
+  }
+  if ( STATE ( GPS_FIX ) && GPS_numSat >= 5 && ! gpsReadyBeepDone ) {
+    beeper ( BEEPER_READY_BEEP );    // keep the "GPS ready" beep
+    gpsReadyBeepDone = true;
+  }
+  return;
+  #endif
 
   if ( ! IS_RC_MODE_ACTIVE ( BOXGPSHOLD ) ) {
     ACTIVATE_RC_MODE ( BOXGPSHOLD );

@@ -116,3 +116,30 @@ default build gate clean.
 | `ubx_frames_check.py` only ran from the repo root | Path resolved from the script's location |
 | New arrays used 4-space indent | Generator emits 2-space, matching the file |
 | Notes | Dyn model 6 gives no 2D fixes ( expect 3D or none in the hand-held test ); check `GPS_ubxNakCount` and the real PVT rate on an M10 at 10 Hz in task 9 |
+
+## Task 5 - Lock out GPS hold / home and GPS_angle; MSP check ( 2026-10-15 )
+
+**Found while tracing the mode paths:** `updateGpsWaypointsAndMode()` ( navigation.cpp, called from
+`mw.cpp:994` on every RX update whenever `SENSOR_GPS` is set ) force-activates `BOXGPSHOLD` on every
+call, and on entering GPS_HOLD sets the target to hard-coded coordinates `GPS_hold = 192326790,
+729157020` ( ~19.23° N, 72.92° E ) instead of the craft's position. With a 3D fix, ≥ 5 satellites and
+sticks within ±40 of centre ( `ap_mode` 40 ), GPS_HOLD would engage by itself and
+`updateGpsStateForHomeAndHoldMode()` ( `mw.cpp:1402`, once `GPS_FIX_HOME` is set at arm ) would feed
+`GPS_angle` into every PID controller's angle error, steering towards that fixed point. It has been in
+the code since `8b06067` ( 2025-03-01 ) but never ran, because `#define GPS` did not compile until this
+work.
+
+| File | Change | Why |
+|---|---|---|
+| [flight/navigation.h](../../../../src/main/flight/navigation.h) | `GPS_NAV_MODES_LOCKED`, default 1. | One switch for the fusion topic to lift. |
+| [flight/navigation.cpp](../../../../src/main/flight/navigation.cpp) `updateGpsWaypointsAndMode()` | Locked: clears GPS_HOLD / GPS_HOME and `nav_mode`, calls `GPS_reset_nav()` ( zeroes `GPS_angle`, nav PIDs ) if any was set, keeps the "GPS ready" beep, returns before the forced `ACTIVATE_RC_MODE ( BOXGPSHOLD )`. | Neither mode can be engaged by RC switches, MSP waypoints ( `MSP_SET_WP` writes `nav_mode` ) or the forced box. |
+| `updateGpsStateForHomeAndHoldMode()` | Locked: sets `GPS_angle` to 0 and returns. | Second barrier in front of the PID input. |
+
+Verification by inspection: `GPS_angle` is written only at navigation.cpp:63 ( init 0 ), :369
+( `GPS_reset_nav`, 0 ), :646-647 ( lock, 0 ) and :655-659 ( unreachable while locked ). MSP_RAW_GPS /
+MSP_COMP_GPS ( serial_msp.cpp:1146-1160 ) read `GPS_FIX`, `GPS_numSat`, `GPS_coord`, `GPS_altitude`,
+`GPS_speed`, `GPS_ground_course`, distance / direction to home: same globals and units on the PVT path
+( task 3 ), so no change. `onGpsNewData()` still runs ( home position, distance / direction to home ).
+
+Builds: GPS serial 109.1 KB, GPS + SPI 107.8 KB, GPS + I2C 107.4 KB ( −0.5 KB, locked code is dead );
+no new gate entries vs the pre-topic GPS build; default gate clean.

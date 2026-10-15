@@ -102,6 +102,13 @@ void gpsUseProfile(gpsProfile_t *gpsProfileToUse);
 void gpsUsePIDs(pidProfile_t *pidProfile);
 void updateGpsStateForHomeAndHoldMode(void);
 void updateGpsWaypointsAndMode(void);
+
+// GPS_HOLD / GPS_HOME stay locked out ( never engaged, GPS_angle held at 0 ) until a GPS / IMU
+// fusion topic replaces the GPS-only MultiWii navigation ( gps-spi-i2c task 5 ). Before the lock,
+// a 3D fix with centred sticks engaged GPS_HOLD on its own, towards a hard-coded GPS_hold point.
+#ifndef GPS_NAV_MODES_LOCKED
+  #define GPS_NAV_MODES_LOCKED 1
+#endif
 void navigationInit(gpsProfile_t *initialGpsProfile, pidProfile_t *pidProfile);
 void onGpsNewData(void);
 
