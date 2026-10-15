@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Current task** | none: run /pluto-task next |
+| **Current task** | 3 - NAV-PVT parser |
 | **Next step** | Task 3: NAV-PVT in the UBX parser ( struct, class check, field mapping, host-side frame test ) |
 | **Open questions** | module part number, D_SEL, PB7 free, ESP or ELRS mode ( team ) |
 | **Blocked on** | nothing for tasks 1-8; hardware for task 9 |
@@ -30,7 +30,7 @@
 |---|---|---|---|---|
 | 1 | Bus transport driver ( SPI2 + I2C1 ) | done 2026-10-14 | - | pluto-driver, pluto-rules, c-pro |
 | 2 | gps.cpp on the bus transport | done 2026-10-15 | 1 | pluto-rules, cpp-pro |
-| 3 | NAV-PVT parser | todo | 2 | pluto-rules |
+| 3 | NAV-PVT parser | in-progress | 2 | pluto-rules |
 | 4 | Module configuration over SPI / I2C | todo | 2, 3 | pluto-rules, spec-to-code-compliance |
 | 5 | Lock out GPS hold / home and GPS_angle; MSP check | todo | 2 | pluto-rules |
 | 6 | User API: GPS read functions | todo | 3 | pluto-rules, cpp-pro |
@@ -95,7 +95,7 @@ PVT alone. Legacy messages keep working. No RAM change ( union already 344 B ).
 - **Safety impact:** none ( data only ).
 - **Done when:** builds; a hand-made PVT frame ( host-side check script ) decodes to the expected values.
 - **Rollback:** revert the commit.
-- **Status:** todo
+- **Status:** in-progress
 - **Result:**
 
 ### 4. Module configuration over SPI / I2C

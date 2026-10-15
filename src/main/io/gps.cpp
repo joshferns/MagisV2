@@ -42,6 +42,7 @@
 #include "io/gps.h"
 
 #include "drivers/gps_ublox_bus.h"
+#include "io/gps_ubx_pvt.h"
 
 #include "flight/gps_conversion.h"
 #include "flight/pid.h"
@@ -62,6 +63,7 @@
   #define LOG_UBLOX_SVINFO 'I'
   #define LOG_UBLOX_POSLLH 'P'
   #define LOG_UBLOX_VELNED 'V'
+  #define LOG_UBLOX_PVT    'T'
 
   #define GPS_SV_MAXSATS   16
 
@@ -81,6 +83,12 @@ uint8_t GPS_update               = 0;             // it's a binary toggle to dis
 uint16_t GPS_altitude;                            // altitude in 0.1m
 uint16_t GPS_speed;                               // speed in 0.1m/s
 uint16_t GPS_ground_course = 0;                   // degrees * 10
+int16_t GPS_velNED [ 3 ];                         // cm/s north / east / down ( NAV-PVT or NAV-VELNED )
+uint16_t GPS_hAcc = 65535;                        // cm, horizontal accuracy estimate
+uint16_t GPS_vAcc = 65535;                        // cm, vertical accuracy estimate
+uint8_t GPS_fixType;                              // UBX fix type: 0 none, 2 2D, 3 3D, ...
+uint16_t GPS_ubxAckCount;                         // UBX-ACK-ACK received ( configuration accepted )
+uint16_t GPS_ubxNakCount;                         // UBX-ACK-NAK received ( configuration rejected )
 
 uint8_t GPS_numCh;                                // Number of channels
 uint8_t GPS_svinfo_chn [ GPS_SV_MAXSATS ];        // Channel number
@@ -1045,8 +1053,16 @@ static bool _new_speed;
   // is calculated as 8 + 12*numCh.  numCh in the case of a Glonass receiver is 28.
   #define UBLOX_PAYLOAD_SIZE 344
 
+  // While NAV-PVT keeps arriving, the legacy messages of the same epoch must not trigger a second
+  // navigation update ( onGpsNewData ( ) ): it would see a near-zero time step between the two.
+  #define UBX_PVT_PREFERRED_MS 1000
+
+static uint32_t lastPvtMs;
+static bool pvtSeen;
+
 // Receive buffer
 static union {
+  ubx_nav_pvt pvt;
   ubx_nav_posllh posllh;
   ubx_nav_status status;
   ubx_nav_solution solution;
@@ -1063,18 +1079,79 @@ void _update_checksum ( uint8_t *data, uint8_t len, uint8_t *ck_a, uint8_t *ck_b
   }
 }
 
+static void ubloxApplyPvt ( void ) {
+  gpsPvt_t pvt;
+
+  if ( ! ubxDecodePvt ( &_buffer.pvt, _payload_length, &pvt ) ) {
+    return;
+  }
+
+  GPS_coord [ LAT ]  = pvt.lat;
+  GPS_coord [ LON ]  = pvt.lon;
+  GPS_altitude       = ( uint16_t ) ( pvt.altitudeCm / 100 );    // m, same as the POSLLH path
+  GPS_velNED [ 0 ]   = pvt.velNedCm [ 0 ];
+  GPS_velNED [ 1 ]   = pvt.velNedCm [ 1 ];
+  GPS_velNED [ 2 ]   = pvt.velNedCm [ 2 ];
+  GPS_speed          = pvt.groundSpeedCm;                         // cm/s, same as the VELNED path
+  GPS_ground_course  = pvt.courseDeci;
+  GPS_hAcc           = pvt.hAccCm;
+  GPS_vAcc           = pvt.vAccCm;
+  GPS_hdop           = pvt.pDop;                                  // PDOP in place of SOL's position DOP
+  GPS_numSat         = pvt.numSat;
+  GPS_fixType        = pvt.fixType;
+  next_fix           = pvt.fix3d;
+
+  if ( next_fix ) {
+    ENABLE_STATE ( GPS_FIX );
+  } else {
+    DISABLE_STATE ( GPS_FIX );
+  }
+
+  lastPvtMs     = millis ( );
+  pvtSeen       = true;
+  _new_position = true;
+  _new_speed    = true;
+}
+
 static bool UBLOX_parse_gps ( void ) {
   uint32_t i;
 
   *gpsPacketLogChar = LOG_IGNORED;
 
+  if ( _class == CLASS_ACK ) {
+    if ( _msg_id == MSG_ACK_ACK ) {
+      GPS_ubxAckCount++;
+    } else if ( _msg_id == MSG_ACK_NACK ) {
+      GPS_ubxNakCount++;
+    }
+    return false;
+  }
+
+  if ( _class != CLASS_NAV ) {
+    return false;
+  }
+
+  if ( _msg_id == UBX_MSG_NAV_PVT ) {
+    *gpsPacketLogChar = LOG_UBLOX_PVT;
+    ubloxApplyPvt ( );
+  } else if ( pvtSeen && ( millis ( ) - lastPvtMs ) < UBX_PVT_PREFERRED_MS ) {
+    // NAV-PVT is current: the legacy POSLLH / STATUS / SOL / VELNED of this epoch add nothing
+    if ( _msg_id != MSG_SVINFO ) {
+      return false;
+    }
+  }
+
   switch ( _msg_id ) {
+    case UBX_MSG_NAV_PVT:
+      break;
     case MSG_POSLLH:
       *gpsPacketLogChar = LOG_UBLOX_POSLLH;
       // i2c_dataset.time                = _buffer.posllh.time;
       GPS_coord [ LON ] = _buffer.posllh.longitude;
       GPS_coord [ LAT ] = _buffer.posllh.latitude;
       GPS_altitude      = _buffer.posllh.altitude_msl / 10 / 100;    // alt in m
+      GPS_hAcc          = ( uint16_t ) ( _buffer.posllh.horizontal_accuracy / 10u > 65535u ? 65535u : _buffer.posllh.horizontal_accuracy / 10u );
+      GPS_vAcc          = ( uint16_t ) ( _buffer.posllh.vertical_accuracy / 10u > 65535u ? 65535u : _buffer.posllh.vertical_accuracy / 10u );
       if ( next_fix ) {
         ENABLE_STATE ( GPS_FIX );
       } else {
@@ -1093,7 +1170,8 @@ static bool UBLOX_parse_gps ( void ) {
       next_fix          = ( _buffer.solution.fix_status & NAV_STATUS_FIX_VALID ) && ( _buffer.solution.fix_type == FIX_3D );
       if ( ! next_fix )
         DISABLE_STATE ( GPS_FIX );
-      GPS_numSat = _buffer.solution.satellites;
+      GPS_numSat  = _buffer.solution.satellites;
+      GPS_fixType = _buffer.solution.fix_type;
       GPS_hdop   = _buffer.solution.position_DOP;
       break;
     case MSG_VELNED:
@@ -1101,6 +1179,9 @@ static bool UBLOX_parse_gps ( void ) {
       // speed_3d                        = _buffer.velned.speed_3d;  // cm/s
       GPS_speed         = _buffer.velned.speed_2d;                               // cm/s
       GPS_ground_course = ( uint16_t ) ( _buffer.velned.heading_2d / 10000 );    // Heading 2D deg * 100000 rescaled to deg * 10
+      GPS_velNED [ 0 ]  = ( int16_t ) constrain ( _buffer.velned.ned_north, -32768, 32767 );    // cm/s
+      GPS_velNED [ 1 ]  = ( int16_t ) constrain ( _buffer.velned.ned_east, -32768, 32767 );
+      GPS_velNED [ 2 ]  = ( int16_t ) constrain ( _buffer.velned.ned_down, -32768, 32767 );
       _new_speed        = true;
       break;
     case MSG_SVINFO:

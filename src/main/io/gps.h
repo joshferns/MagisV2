@@ -146,6 +146,12 @@ extern uint32_t GPS_svInfoReceivedCount;
 extern uint16_t GPS_altitude;              // altitude in 0.1m
 extern uint16_t GPS_speed;                 // speed in 0.1m/s
 extern uint16_t GPS_ground_course;         // degrees * 10
+extern int16_t GPS_velNED[3];              // cm/s north / east / down
+extern uint16_t GPS_hAcc;                  // cm, horizontal accuracy estimate ( 65535 = unknown )
+extern uint16_t GPS_vAcc;                  // cm, vertical accuracy estimate ( 65535 = unknown )
+extern uint8_t GPS_fixType;                // UBX fix type: 0 none, 2 2D, 3 3D, ...
+extern uint16_t GPS_ubxAckCount;           // UBX-ACK-ACK received
+extern uint16_t GPS_ubxNakCount;           // UBX-ACK-NAK received
 extern uint8_t GPS_numCh;                  // Number of channels
 extern uint8_t GPS_svinfo_chn[16];         // Channel number
 extern uint8_t GPS_svinfo_svid[16];        // Satellite ID

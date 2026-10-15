@@ -61,3 +61,19 @@ A missing SPI module costs one reconfigure cycle every ~2.5 s ( ~16 writes, each
 | Docs said "probe repeated about once a second" / "~3.4 s cycle" | DESIGN, TASKS decision and this file corrected |
 | Interim `ubloxInit` asks ~820 B/s on I2C ( 800 B/s link ) | Left to task 4 ( PVT-only on I2C ); an I2C bench test before task 4 will drop frames |
 | `autoConfig` OFF on the bus path leaves the module on NMEA | Logged; default is ON |
+
+## Task 3 - NAV-PVT parser ( 2026-10-15 )
+
+| File | Change | Why |
+|---|---|---|
+| [io/gps_ubx_pvt.h](../../../../src/main/io/gps_ubx_pvt.h) | New, dependency-free. `ubx_nav_pvt` ( 92 B, `static_assert` on size; all fields naturally aligned so it matches the wire layout ), `gpsPvt_t` in firmware units, `ubxDecodePvt()` ( length check, mm → cm with saturation, heading 1e-5 deg → deg × 10 wrapped 0-3599, fix = gnssFixOK and 3D ). | Testable on a host without the firmware headers. |
+| [io/gps.cpp](../../../../src/main/io/gps.cpp) `UBLOX_parse_gps()` | Class check: ACK-ACK / ACK-NAK counted ( `GPS_ubxAckCount` / `GPS_ubxNakCount` ), non-NAV classes ignored. NAV-PVT ( `ubloxApplyPvt()` ) sets position, altitude, NED velocity, speed, course, hAcc / vAcc, PDOP ( into `GPS_hdop` ), numSat, fix type and both new-data flags, so one PVT is one navigation update. While a PVT arrived in the last 1 s, legacy POSLLH / STATUS / SOL / VELNED are ignored ( SVINFO still read ). | A CFG or ACK message with id 0x02 / 0x03 / 0x06 used to be parsed as NAV data. Legacy + PVT of the same epoch would call `onGpsNewData()` twice with a near-zero time step. |
+| `io/gps.cpp` legacy path | POSLLH also fills `GPS_hAcc` / `GPS_vAcc`, VELNED fills `GPS_velNED`, SOL fills `GPS_fixType`. | Same globals whichever message set the module sends. |
+| [io/gps.h](../../../../src/main/io/gps.h) | Externs for `GPS_velNED`, `GPS_hAcc`, `GPS_vAcc`, `GPS_fixType`, `GPS_ubxAckCount`, `GPS_ubxNakCount`. | For the user API ( task 6 ), log ( task 7 ), config check ( task 4 ). |
+| [tests/pvt_decode_test.cpp](tests/pvt_decode_test.cpp) | Host test: builds a NAV-PVT frame at the documented offsets, checks the checksum, struct alignment and every decoded field, plus no-fix, bad length, saturation and course wrap. | Task 3 "done when". Result: all checks pass ( frame checksum 66 53 ). |
+
+Builds ( PRIMUS_X2_v1 ): GPS serial 109.5 KB, GPS + SPI 108.3 KB / 15.7 KB, GPS + I2C 107.9 KB / 15.6 KB
+( +0.6-0.7 KB ); no new warnings; default build gate clean. RAM unchanged ( union already 344 B ).
+
+Units note: `GPS_speed` is cm/s on both paths ( gps.h still says 0.1 m/s, pre-existing ); `GPS_hdop`
+holds PDOP × 100 on the PVT path ( SOL also gave position DOP ).
