@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **Current task** | none: run /pluto-task next |
-| **Next step** | Task 7: GPS fields in the PlutoPilot.cpp diagnostic log ( ≤ 130 B / tick ) and TESTING.md bench / outdoor procedure |
+| **Next step** | Task 8: build gate on all variants ( default, GPS + SPI, GPS + I2C, GPS + SPI + OPTIC_FLOW ) |
 | **Open questions** | module part number, D_SEL, PB7 free, ESP or ELRS mode ( team ) |
 | **Blocked on** | nothing for tasks 1-8; hardware for task 9 |
 | **Last updated** | 2026-10-15 |
@@ -34,7 +34,7 @@
 | 4 | Module configuration over SPI / I2C | done 2026-10-15 | 2, 3 | pluto-rules, spec-to-code-compliance |
 | 5 | Lock out GPS hold / home and GPS_angle; MSP check | done 2026-10-15 | 2 | pluto-rules |
 | 6 | User API: GPS read functions | done 2026-10-15 | 3 | pluto-rules, cpp-pro |
-| 7 | Flight-log fields and bench procedure | todo | 3 | pluto-flighttest |
+| 7 | Flight-log fields and bench procedure | done 2026-10-15 | 3 | pluto-flighttest |
 | 8 | Build gate | todo | 1-7 | pluto-build |
 | 9 | Hardware validation | todo | 8 | pluto-flighttest |
 | 10 | Architecture & pipeline docs ( PIPELINE_UPDATE.md ) | todo | 9 | graphify, spec-to-code-compliance |
@@ -156,8 +156,8 @@ the indoor comms test and the outdoor hand-held fix test.
 - **Safety impact:** none; byte budget checked.
 - **Done when:** builds; byte count per tick written down and under 130.
 - **Rollback:** revert the commit.
-- **Status:** todo
-- **Result:**
+- **Status:** done 2026-10-15
+- **Result:** `GPS_BENCH_LOG` in PlutoPilot.cpp ( off by default ): solution line ≤ 125 B, status line ≤ 88 B every 10th record, restart marker. TESTING.md tests A-D with pass criteria. Builds clean with the log on and off.
 
 ### 8. Build gate
 

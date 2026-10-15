@@ -178,3 +178,13 @@ GPS + SPI 107.8 KB, GPS + I2C 107.4 KB; PRIMUS_V5 and PRIMUSX2 build; no new gat
 | Wiki understated I2C: any single failed transfer, also in flight, turns GPS off | Wiki row reworded |
 | Unbacked figures ( accuracy, PDOP, course speed, wander ) | Removed or made qualitative until task 9 measures them |
 | Task 6 done-when contradicted the always-present header; `User_Space_API.md` missing from pipeline docs | TASKS.md updated |
+
+## Task 7 - Flight-log fields and bench procedure ( 2026-10-15 )
+
+| File | Change | Why |
+|---|---|---|
+| [PlutoPilot.cpp](../../../../PlutoPilot.cpp) | GPS bench log behind `#define GPS_BENCH_LOG` ( commented out ): every 100 ms a solution line ( `t n Fx Sv hA dN dE vN vE`, ≤ 125 B ), every 10th record a status line instead ( `t Av Bs Be Bu Ak Nk`, ≤ 88 B ), and a `GPSLOG_START` marker on its own tick from `onLoopStart ( )`. Reads GPS through `Gps_Get ( )`; bus counters via `extern "C"`. | Fits the ~130 B / tick budget ( 15 fields on one line would be ~190 B ). The template file stays clean for users. **Temporary: remove or keep disabled before release.** |
+| [TESTING.md](TESTING.md) | Wiring, enabling, field table, tests A ( indoor comms ), B ( shared bus ), C ( outdoor hand-held ), D ( loss / recovery ) with pass criteria. | Task 9 procedure. |
+
+Builds: log off = default unchanged, gate clean; log on: GPS serial 110.1 KB, SPI 109.0 KB, I2C 108.6 KB,
+no warnings in PlutoPilot.cpp, no new gate entries.

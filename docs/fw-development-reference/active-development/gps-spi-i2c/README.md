@@ -23,6 +23,8 @@ address **0x42**.
 
 ## Open items
 
+- **Temporary diagnostics:** `GPS_BENCH_LOG` block in `PlutoPilot.cpp` ( off by default ) - remove or keep disabled before release.
+
 - Module part number and D_SEL / interface jumper ( team ).
 - PB7 free on the team's wiring ( team ).
 - ESP or ELRS receiver mode on the GPS craft, and whether OPTIC_FLOW flies at the same time.
