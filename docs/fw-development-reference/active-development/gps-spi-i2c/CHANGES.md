@@ -198,3 +198,20 @@ no warnings in PlutoPilot.cpp, no new gate entries.
 | "`Ak` ≥ 4" did not match the task 4 lists; an M10 would fail it | Exact Ak / Nk per module and bus in TESTING.md |
 | Update rate not measurable from `dN` | `Pk`: valid frames per status interval, expected values tabled |
 | `cosf` every tick | Computed once with the origin |
+
+## Task 8 - Build gate ( 2026-10-15 )
+
+PRIMUS_X2_v1, Arm GCC 13.2.1 ( the warnings baseline was recorded with 14.2.1 ), branch `feat/gps` @ `d747142`.
+
+| Build | `target.h` | Flash | RAM | Gate |
+|---|---|---|---|---|
+| Default | as shipped | 100.8 KB | 14.7 KB | `driver.sh --gate`: no new warnings in `src/` ( 34 fixed, from the optic-flow work ) |
+| GPS serial | `GPS` | 109.0 KB | 15.6 KB | no entries beyond a `GPS` build of `e766113` |
+| GPS + SPI | `GPS`, `GPS_SPI` | 107.8 KB | 15.7 KB | same |
+| GPS + I2C | `GPS`, `GPS_I2C` | 107.4 KB | 15.6 KB | same |
+| GPS + SPI + optic flow | + `OPTIC_FLOW`, `PAW3903_SPI` | 112.4 KB | 16.0 KB | no entries beyond a `GPS` + `OPTIC_FLOW` + `PAW3903_SPI` build of `e766113` |
+| GPS + SPI + optic flow + VL53L1X | + `LASER_TOF_L1x` | 121.1 KB | 17.0 KB | builds ( no matching pre-topic baseline ) |
+
+Every build produced a `.hex`. Largest RAM use leaves 23 KB for the stack. PRIMUS_V5 and PRIMUSX2
+default builds were checked in task 6. The GPS-build comparison is used because the committed baseline
+is a default ( GPS-off ) build, in which the GPS sources are not compiled.

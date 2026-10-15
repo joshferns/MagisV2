@@ -6,10 +6,10 @@
 
 | | |
 |---|---|
-| **Current task** | none: run /pluto-task next |
-| **Next step** | Task 8: build gate on all variants ( default, GPS + SPI, GPS + I2C, GPS + SPI + OPTIC_FLOW ) |
+| **Current task** | 9 - Hardware validation ( blocked ) |
+| **Next step** | Task 9: team wires the breakout per TESTING.md set-up, runs tests A-D, saves logs as logs/log-N.txt |
 | **Open questions** | module part number, D_SEL, PB7 free, ESP or ELRS mode ( team ) |
-| **Blocked on** | nothing for tasks 1-8; hardware for task 9 |
+| **Blocked on** | task 9: the team's GPS breakout ( part number, SPI / I2C, wiring ) |
 | **Last updated** | 2026-10-15 |
 
 ## Summary
@@ -35,8 +35,8 @@
 | 5 | Lock out GPS hold / home and GPS_angle; MSP check | done 2026-10-15 | 2 | pluto-rules |
 | 6 | User API: GPS read functions | done 2026-10-15 | 3 | pluto-rules, cpp-pro |
 | 7 | Flight-log fields and bench procedure | done 2026-10-15 | 3 | pluto-flighttest |
-| 8 | Build gate | todo | 1-7 | pluto-build |
-| 9 | Hardware validation | todo | 8 | pluto-flighttest |
+| 8 | Build gate | done 2026-10-15 | 1-7 | pluto-build |
+| 9 | Hardware validation | blocked (GPS breakout from the team) | 8 | pluto-flighttest |
 | 10 | Architecture & pipeline docs ( PIPELINE_UPDATE.md ) | todo | 9 | graphify, spec-to-code-compliance |
 | 11 | Topic review | todo | 10 | pluto-reviewer agent |
 | 12 | Graph refresh & commit | todo | 11 | graphify, pluto-commit |
@@ -167,8 +167,8 @@ and `GPS` + `GPS_SPI` + `OPTIC_FLOW`.
 - **Depends on:** 1-7
 - **Skills / agent:** pluto-build
 - **Done when:** no new `src/` warnings; flash / RAM recorded for each variant.
-- **Status:** todo
-- **Result:**
+- **Status:** done 2026-10-15
+- **Result:** All six builds pass and produce a `.hex`; default gate clean ( 34 fixed ); GPS builds add nothing over the same build of `e766113`. Largest: GPS + SPI + flow + L1X 121.1 KB / 17.0 KB.
 
 ### 9. Hardware validation
 
@@ -179,7 +179,7 @@ position and velocity consistent with a walked path. Both buses if the breakout 
 - **Depends on:** 8
 - **Skills / agent:** pluto-flighttest; pluto-log-analyst for long logs
 - **Done when:** results and logs in `TESTING.md`.
-- **Status:** todo
+- **Status:** blocked (GPS breakout from the team)
 - **Result:**
 
 ### 10. Architecture & pipeline docs ( PIPELINE_UPDATE.md )
