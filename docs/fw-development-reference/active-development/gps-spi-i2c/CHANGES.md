@@ -86,3 +86,20 @@ holds PDOP × 100 on the PVT path ( SOL also gave position DOP ).
 | `gps.h` said `GPS_altitude` 0.1 m and `GPS_speed` 0.1 m/s | Comments corrected to m and cm/s ( what both paths store ) |
 | 84-byte M7 NAV-PVT rejected silently | Out of scope ( decisions log ) |
 | Legacy-suppression window | Verified: one update per epoch for in-order messages; at most 1 s gap when PVT stops |
+
+## Task 4 - Module configuration over SPI / I2C ( 2026-10-15 )
+
+| File | Change | Why |
+|---|---|---|
+| [io/gps.cpp](../../../../src/main/io/gps.cpp) `ubloxBusInit` | New setup list per bus, sent by `gpsInitUbloxBus()` in place of the serial `ubloxInit`. **SPI ( 185 B, 9 frames ):** CFG-VALSET RAM ( SPI out UBX on / NMEA off, NAV-PVT on SPI, 100 ms, nav 1, dyn model 6 ), CFG-PRT port 4 ( mode 0, ffCnt 50, in UBX+NMEA+RTCM, out UBX ), CFG-MSG NAV-PVT / POSLLH / STATUS / SOL / VELNED, CFG-RATE 100 ms, CFG-NAV5 dyn model only. **I2C ( 141 B, 5 frames ):** CFG-VALSET RAM ( I2C out UBX on / NMEA off, NAV-PVT on I2C, 200 ms, dyn 6 ), CFG-PRT port 0 ( DDC address 0x42, out UBX ), CFG-MSG NAV-PVT, CFG-RATE 200 ms, CFG-NAV5 dyn model only. SBAS frame unchanged after the list. | VALSET for M9 / M10, legacy frames for M8; the module NAKs the set it does not know ( `GPS_ubxNakCount` ). Port output set to UBX only, so no NMEA disables. I2C stays PVT-only at 5 Hz ( 500 B/s vs 800 B/s read ). |
+| [tests/ubx_frames_gen.py](tests/ubx_frames_gen.py) | Generates the frames ( checksums computed, not typed ). Reproduces the firmware's existing POSLLH and 5 Hz CFG-RATE frames byte for byte. | No hand-made checksums. |
+| [tests/ubx_frames_check.py](tests/ubx_frames_check.py) | Reads every UBX array and SBAS message out of `gps.cpp` and checks sync, lengths and checksums. Result: all 8 lists valid ( `ubloxInit`, both `ubloxBusInit`, 5 SBAS ). A corrupted byte is caught. | Task 4 "done when". |
+
+**Dynamic model change:** the serial `ubloxInit` uses pedestrian ( 3 ); the bus lists use airborne
+< 1 g ( 6 ), and set only that field ( NAV5 mask 0x0001 ) so the module's other navigation settings stay as they are.
+
+VALSET keys were checked against the documented key table; one recalled value was wrong
+( SPI output protocol is 0x107A0001, 0x10790001 is SPI *input* ) and was corrected before use.
+
+Builds ( PRIMUS_X2_v1 ): GPS + SPI 108.3 KB / 15.7 KB, GPS + I2C 107.9 KB / 15.6 KB; no new warnings;
+default build gate clean.
